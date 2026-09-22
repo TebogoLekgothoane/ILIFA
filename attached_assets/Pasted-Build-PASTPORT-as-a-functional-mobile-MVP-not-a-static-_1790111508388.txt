@@ -1,0 +1,267 @@
+Build PASTPORT as a functional mobile MVP, not a static UI prototype.
+
+PASTPORT lets tourists visit historical places and experience their past through their phone.
+
+CORE FLOW:
+
+Discover historical site
+→ View real location
+→ Open REAL phone camera
+→ Tap “SHOW ME THEN”
+→ Historical 3D/AR reconstruction appears
+→ Narration plays
+→ User explores the reconstruction
+→ User asks the AI questions
+→ User changes the historical year
+
+TECH STACK:
+- React Native
+- Expo
+- TypeScript
+- Expo Router
+- Supabase
+- Supabase Auth
+- Supabase Storage
+- PostgreSQL
+- Expo Camera
+- expo-location
+- react-native-maps
+- Three.js / React Three Fiber or another Expo-compatible 3D library
+- Expo-compatible audio library
+- Supabase Edge Functions for AI requests
+
+IMPORTANT:
+The app does NOT need production-level AR tracking yet.
+
+However, every important interaction must actually work.
+
+==================================================
+REAL FUNCTIONALITY
+==================================================
+
+CAMERA:
+Use the device's REAL camera with Expo Camera.
+
+Request camera permission and show the live camera feed.
+
+Do NOT use a fake camera image.
+
+The PASTPORT interface should appear over the live camera.
+
+LOCATION:
+Use the device's REAL GPS location with expo-location.
+
+Request permission and display the user's location on the map.
+
+Show nearby historical locations based on real coordinates.
+
+AUDIO:
+Use a REAL audio player.
+
+When the user taps:
+
+“LISTEN TO STORY”
+
+actually play a narration audio file.
+
+Include:
+
+Play
+Pause
+Seek
+Replay
+
+Store narration files in Supabase Storage.
+
+AI:
+Create a working AI historical guide.
+
+Users can ask:
+
+“What happened here?”
+
+“Who used this building?”
+
+“What am I looking at?”
+
+“What did this place look like in 1920?”
+
+Send the request through a secure backend/Edge Function.
+
+Never expose API keys in the mobile app.
+
+==================================================
+AR / 3D SIMULATION
+==================================================
+
+The AR experience can be simulated for the MVP, but it must LOOK and FEEL like the real feature.
+
+Use the live camera as the background.
+
+Overlay a real 3D model or layered historical reconstruction on top of the camera view.
+
+Allow the user to:
+
+- rotate the view
+- change the historical year
+- show/hide historical elements
+- tap historical objects
+- open information about objects
+
+Create:
+
+SHOW ME THEN
+
+When pressed:
+
+TODAY
+→ transition animation
+→ HISTORICAL RECONSTRUCTION
+
+Use an actual GLB/GLTF 3D asset if possible.
+
+If full AR plane tracking is unavailable, simulate the anchoring using the camera view, device orientation and controlled positioning.
+
+Clearly structure the AR code so native ARKit/ARCore can be integrated later.
+
+Do NOT simply display a screenshot pretending to be AR.
+
+==================================================
+TIME TRAVEL
+==================================================
+
+Create an interactive timeline:
+
+TODAY ─────●──── 1950 ──── 1920
+
+Moving the slider must actually change the displayed historical content.
+
+For the MVP, create three states:
+
+2026:
+Current location
+
+1950:
+Historical reconstruction
+
+1920:
+Historical reconstruction
+
+Animate the transition between them.
+
+==================================================
+DEMO LOCATION
+==================================================
+
+Use East London Railway Station as the demo location.
+
+Create:
+
+- coordinates
+- historical description
+- 1920 experience
+- 1950 experience
+- historical narration
+- historical objects
+- sample 3D reconstruction
+- historical images
+- source information
+
+Clearly label any simulated/demo reconstruction.
+
+==================================================
+APP SCREENS
+==================================================
+
+1. ONBOARDING
+Introduce PASTPORT.
+
+2. HOME
+Show nearby historical experiences.
+
+3. EXPLORE
+Real map with historical locations.
+
+4. SITE DETAILS
+Historical information, images, timeline and “Experience in AR”.
+
+5. CAMERA / AR EXPERIENCE
+This is the main feature.
+
+6. AI GUIDE
+Contextual conversation about the current location.
+
+7. TRAILS
+Self-guided historical walking routes.
+
+8. SAVED
+Saved locations and experiences.
+
+9. PROFILE
+Visited places, completed trails and settings.
+
+==================================================
+DESIGN
+==================================================
+
+Make it feel like a premium technology + heritage product.
+
+Use:
+
+Dark navy
+Black
+White
+Electric purple
+
+Use cinematic historical imagery, glass-style overlays, large typography and smooth animations.
+
+The AR camera screen should be the strongest visual experience.
+
+Do NOT make it look like a generic chatbot.
+
+==================================================
+DATABASE
+==================================================
+
+Create Supabase tables for:
+
+historical_sites
+historical_periods
+historical_objects
+historical_sources
+historical_images
+historical_models
+narrations
+trails
+trail_stops
+users/profiles
+saved_sites
+user_visits
+ai_conversations
+
+Use Supabase Storage for:
+
+3D models
+historical images
+audio narration
+
+==================================================
+MOST IMPORTANT
+==================================================
+
+Prioritize making these features genuinely work:
+
+✓ REAL CAMERA
+✓ REAL GPS
+✓ REAL MAP
+✓ REAL AUDIO NARRATION
+✓ WORKING AI QUESTIONS
+✓ WORKING HISTORICAL TIMELINE
+✓ INTERACTIVE 3D RECONSTRUCTION
+✓ WORKING SAVE/EXPLORE FLOW
+
+The AR tracking can be simulated for the MVP.
+
+The user should be able to hold their actual phone, open the camera, see the real environment, tap “SHOW ME THEN”, hear narration, interact with the historical reconstruction and ask the AI questions.
+
+This should feel like a working product demonstration, not a collection of screenshots.
