@@ -14,7 +14,7 @@ export default function ExploreMap({ coordinates, onOpenSite, onLocate }: Explor
   return (
     <View style={styles.map}>
       <MapView
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         initialRegion={{ ...coordinates, latitudeDelta: 0.045, longitudeDelta: 0.045 }}
         showsMyLocationButton={false}
         showsCompass={false}

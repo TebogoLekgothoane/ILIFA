@@ -30,7 +30,7 @@ export default function ExploreMap({ coordinates, onOpenSite, onLocate }: Explor
 
 const styles = StyleSheet.create({
   map: { height: 270, borderRadius: 25, backgroundColor: '#11132A', overflow: 'hidden', marginBottom: 25, position: 'relative', borderWidth: 1, borderColor: '#29264B' },
-  mapGrid: { ...StyleSheet.absoluteFillObject, opacity: 0.32, backgroundColor: '#151735' },
+  mapGrid: { ...StyleSheet.absoluteFill, opacity: 0.32, backgroundColor: '#151735' },
   mapRoad: { position: 'absolute', height: 2, backgroundColor: '#47456B' },
   roadOne: { width: '115%', top: 110, left: -20, transform: [{ rotate: '33deg' }] },
   roadTwo: { width: '90%', top: 205, left: 45, transform: [{ rotate: '-17deg' }] },
