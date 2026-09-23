@@ -1,1 +1,2 @@
 - [Expo preview tooling](expo-preview-tooling.md) — the Expo preview can serve normally even when React Native DevTools logs a missing GLib shared-library warning.
+- [Expo Jest native mocks](expo-jest-native-mocks.md) — expose mocked native functions through closures because Jest hoists mock factories before test-scope mocks initialize.

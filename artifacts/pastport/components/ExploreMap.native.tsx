@@ -29,7 +29,7 @@ export default function ExploreMap({ coordinates, onOpenSite, onLocate }: Explor
           <View style={styles.smallMarker}><Feather name="map-pin" size={14} color={ui.primary} /></View>
         </Marker>
       </MapView>
-      <Pressable onPress={onLocate} style={styles.mapControl}><Feather name="crosshair" size={17} color={ui.foreground} /></Pressable>
+      <Pressable testID="map-locate-control" onPress={onLocate} style={styles.mapControl}><Feather name="crosshair" size={17} color={ui.foreground} /></Pressable>
     </View>
   );
 }
