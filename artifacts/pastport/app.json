@@ -27,7 +27,12 @@
     "plugins": [
       "expo-router",
       "expo-audio",
-      "expo-camera"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PASTPORT uses the camera to place historical reconstructions over the real location."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

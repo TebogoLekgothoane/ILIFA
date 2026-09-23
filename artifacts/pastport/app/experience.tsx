@@ -2,12 +2,13 @@ import { Feather } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { station, periods, SiteObject } from '@/data/pastport';
 import { usePastport } from '@/context/PastportContext';
 import { IconButton, Pill, ui } from '@/components/PastportUI';
 import { NarrationPlayer } from '@/components/NarrationPlayer';
+import { HistoricalModel } from '@/components/HistoricalModel';
 
 export default function ExperienceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -16,8 +17,14 @@ export default function ExperienceScreen() {
   const [revealed, setRevealed] = useState(false);
   const [selectedObject, setSelectedObject] = useState<SiteObject | null>(null);
   const [narrating, setNarrating] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [cameraGranted, setCameraGranted] = useState(false);
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const stationOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    setCameraGranted(Boolean(permission?.granted));
+  }, [permission?.granted]);
 
   useEffect(() => {
     Animated.parallel([
@@ -34,15 +41,42 @@ export default function ExperienceScreen() {
     markVisited(station.id);
   }
 
+  async function requestCameraAccess() {
+    setCameraError(null);
+
+    if (permission?.canAskAgain === false) {
+      await Linking.openSettings();
+      return;
+    }
+
+    try {
+      const nextPermission = await requestPermission();
+      if (nextPermission?.granted) {
+        setCameraGranted(true);
+      } else if (nextPermission) {
+        setCameraGranted(false);
+        setCameraError('Camera access was not granted. You can enable it to continue.');
+      }
+    } catch {
+      setCameraError('We could not start camera access. Check your device settings and try again.');
+    }
+  }
+
+  function handleCameraMountError({ message }: { message: string }) {
+    setCameraError(message || 'The camera could not be started on this device.');
+  }
+
+  const cameraUnavailable = !cameraGranted || Boolean(cameraError);
+
   return (
     <View style={styles.screen}>
-      {permission?.granted ? <CameraView style={styles.camera} facing="back" /> : <View style={styles.cameraFallback}><Feather name="camera-off" size={24} color={ui.primary} /><Text style={styles.permissionTitle}>Your camera is the time machine</Text><Text style={styles.permissionCopy}>Enable camera access to see the real place behind the historical layer.</Text><Pressable onPress={requestPermission} style={styles.permissionButton}><Text style={styles.permissionButtonText}>{permission?.canAskAgain === false ? 'Camera access is required' : 'Enable camera'}</Text></Pressable></View>}
-      <Animated.View style={[styles.cameraTint, { opacity: stationOpacity }]}><LinearGradient colors={['rgba(7,7,17,0.4)', 'transparent', 'rgba(7,7,17,0.92)']} style={StyleSheet.absoluteFill} /></Animated.View>
-      <HistoricalLayer visible={revealed} year={year} opacity={overlayOpacity} />
+      {!cameraUnavailable ? <CameraView style={styles.camera} facing="back" onMountError={handleCameraMountError} /> : <View style={styles.cameraFallback}><Feather name="camera-off" size={24} color={ui.primary} /><Text style={styles.permissionTitle}>{cameraError ? 'Camera unavailable' : 'Your camera is the time machine'}</Text><Text style={styles.permissionCopy}>{cameraError || 'Enable camera access to see the real place behind the historical layer.'}</Text><Pressable onPress={requestCameraAccess} style={styles.permissionButton}><Text style={styles.permissionButtonText}>{permission?.canAskAgain === false ? 'Open camera settings' : 'Enable camera'}</Text></Pressable></View>}
+      <Animated.View pointerEvents="none" style={[styles.cameraTint, { opacity: stationOpacity }]}><LinearGradient colors={['rgba(7,7,17,0.4)', 'transparent', 'rgba(7,7,17,0.92)']} style={StyleSheet.absoluteFill} /></Animated.View>
+      <HistoricalModel visible={revealed} />
       <View style={styles.top}><IconButton name="x" onPress={() => router.back()} /><View style={styles.mode}><View style={styles.modeDot} /><Text style={styles.modeText}>PASTPORT · {year}</Text></View><IconButton name="help-circle" onPress={() => router.push('/chat')} /></View>
       <View style={styles.scanLine} />
       <View style={[styles.corner, styles.topLeft]} /><View style={[styles.corner, styles.topRight]} /><View style={[styles.corner, styles.bottomLeft]} /><View style={[styles.corner, styles.bottomRight]} />
-      <View style={styles.cameraLabel}><Text style={styles.cameraEyebrow}>{revealed ? 'AI RECONSTRUCTION' : 'CURRENT LOCATION'}</Text><Text style={styles.cameraTitle}>{revealed ? 'East London · 1920' : 'East London Railway Station'}</Text><Text style={styles.cameraCopy}>{revealed ? 'Based on available historical sources' : 'Point your camera at a place with a story'}</Text></View>
+      <View style={styles.cameraLabel}><Text style={styles.cameraEyebrow}>{revealed ? 'AI RECONSTRUCTION' : 'CURRENT LOCATION'}</Text><Text style={styles.cameraTitle}>{revealed ? `East London · ${year}` : 'East London Railway Station'}</Text><Text style={styles.cameraCopy}>{revealed ? 'Prototype reconstruction based on historical photographs and archival references' : 'Point your camera at a place with a story'}</Text></View>
       {revealed ? station.objects.map((object) => <ObjectHotspot key={object.id} object={object} onPress={() => setSelectedObject(object)} />) : null}
       {selectedObject ? <ObjectCard object={selectedObject} onClose={() => setSelectedObject(null)} onAsk={() => router.push('/chat')} /> : null}
       {narrating && !selectedObject ? <View style={styles.narration}><NarrationPlayer compact autoPlay={narrating} /></View> : null}
@@ -68,7 +102,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#070711' },
   camera: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
   cameraTint: { ...StyleSheet.absoluteFill, zIndex: 1 },
-  cameraFallback: { ...StyleSheet.absoluteFill, zIndex: 1, backgroundColor: '#0D0C1B', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
+  cameraFallback: { ...StyleSheet.absoluteFill, zIndex: 2, backgroundColor: '#0D0C1B', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
   permissionTitle: { color: ui.foreground, fontSize: 22, fontWeight: '700', textAlign: 'center', marginTop: 15 },
   permissionCopy: { color: ui.mutedForeground, fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 8, marginBottom: 18 },
   permissionButton: { backgroundColor: ui.primary, borderRadius: 16, paddingHorizontal: 18, paddingVertical: 12 },
@@ -132,17 +166,3 @@ const styles = StyleSheet.create({
   objectAskText: { color: ui.primary, fontSize: 12, fontWeight: '700' },
   pressed: { opacity: 0.78 },
 });
-
-function HistoricalLayer({ visible, year, opacity }: { visible: boolean; year: number; opacity: Animated.Value }) {
-  return (
-    <Animated.View pointerEvents={visible ? 'auto' : 'none'} style={[styles.historicalLayer, { opacity, transform: [{ scale: year === 1920 ? 1 : 0.92 }] }]}>
-      <View style={styles.reconstructedBuilding}>
-        <View style={styles.roof} />
-        <View style={styles.windowRow}>{[0, 1, 2, 3, 4].map((item) => <View key={item} style={styles.window} />)}</View>
-      </View>
-      <Text style={styles.buildingLabel}>{year === 1920 ? '1920 · RECONSTRUCTED ARRIVAL HALL' : '1950 · RECONSTRUCTED PLATFORM'}</Text>
-      <View style={styles.reconstructionPeople}><View style={styles.person} /><View style={[styles.person, { opacity: 0.65 }]} /><View style={[styles.person, { opacity: 0.8 }]} /></View>
-      <View style={styles.carriage} />
-    </Animated.View>
-  );
-}
