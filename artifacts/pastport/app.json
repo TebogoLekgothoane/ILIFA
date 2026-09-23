@@ -8,15 +8,26 @@
     "scheme": "pastport",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "PASTPORT uses the camera to place historical reconstructions over the real location.",
+        "NSLocationWhenInUseUsageDescription": "PASTPORT uses your location to find nearby historical places."
+      }
     },
-    "android": {},
+    "android": {
+      "permissions": [
+        "CAMERA",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
-      "expo-audio"
+      "expo-audio",
+      "expo-camera"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -5,24 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-export interface HealthStatus {
-  status: string;
-}
-
-export interface AskPastportBody {
-  question: string;
-  site: string;
-  year: number;
-  object?: string;
-}
 
 export interface PastportGuideResponse {
   answer: string;
   documentedHistory: boolean;
   reconstructionNote: string;
 }
-
-export interface ErrorResponse {
-  message: string;
-}
-

@@ -2,13 +2,25 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 import { IconButton, Pill, ScreenShell, SectionHeading, TopBar, ui } from '@/components/PastportUI';
 import { station, trail } from '@/data/pastport';
+import ExploreMap from '@/components/ExploreMap';
 
 const categories = ['All', 'Nearby', 'Historical Sites', 'People', 'Events', 'Trails'];
 
 export default function ExploreScreen() {
   const [category, setCategory] = useState('All');
+  const [permission, requestPermission] = Location.useForegroundPermissions();
+  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+
+  async function useCurrentLocation() {
+    const response = permission?.granted ? permission : await requestPermission();
+    if (!response.granted) return;
+    const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    setUserLocation(location);
+  }
+
   return (
     <ScreenShell>
       <TopBar title="Explore" eyebrow="FIND YOUR NEXT STORY" right={<IconButton name="sliders" onPress={() => undefined} />} />
@@ -17,17 +29,8 @@ export default function ExploreScreen() {
         {categories.map((item) => <Pill key={item} label={item} active={category === item} onPress={() => setCategory(item)} />)}
       </ScrollView>
 
-      <View style={styles.map}>
-        <View style={styles.mapGrid} />
-        <View style={[styles.mapRoad, styles.roadOne]} />
-        <View style={[styles.mapRoad, styles.roadTwo]} />
-        <View style={[styles.mapRoad, styles.roadThree]} />
-        <View style={styles.mapLabel}><Text style={styles.mapLabelText}>EAST LONDON</Text><Text style={styles.mapLabelSub}>Heritage district</Text></View>
-        <MapMarker left="39%" top="32%" active onPress={() => router.push('/site')} />
-        <MapMarker left="66%" top="50%" />
-        <MapMarker left="22%" top="62%" />
-        <View style={styles.mapControl}><Feather name="crosshair" size={17} color={ui.foreground} /></View>
-      </View>
+      <View style={styles.locationBar}><View style={styles.locationStatus}><Feather name={permission?.granted ? 'navigation' : 'map-pin'} size={14} color={permission?.granted ? '#78D6A2' : ui.accent} /><Text style={styles.locationStatusText}>{permission?.granted && userLocation ? 'Showing your live location' : 'Use your live location to find nearby stories'}</Text></View><Pressable onPress={useCurrentLocation}><Text style={styles.locationAction}>{permission?.granted ? 'Refresh' : 'Enable GPS'}</Text></Pressable></View>
+      <ExploreMap coordinates={station.coordinates} onOpenSite={() => router.push('/site')} onLocate={useCurrentLocation} />
 
       <SectionHeading title="Stories near you" action="List view" onAction={() => undefined} />
       <Pressable style={styles.placeCard} onPress={() => router.push('/site')}>
@@ -48,26 +51,14 @@ export default function ExploreScreen() {
   );
 }
 
-function MapMarker({ left, top, active = false, onPress }: { left: string; top: string; active?: boolean; onPress?: () => void }) {
-  return <Pressable onPress={onPress} style={[styles.marker, { left: left as any, top: top as any }, active && styles.markerActive]}><Feather name="map-pin" size={active ? 17 : 14} color={active ? '#11101A' : ui.primary} /></Pressable>;
-}
-
 const styles = StyleSheet.create({
   search: { height: 49, borderRadius: 17, backgroundColor: ui.card, borderWidth: 1, borderColor: ui.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, gap: 10, marginBottom: 16 },
   searchText: { color: ui.mutedForeground, fontSize: 13, flex: 1 },
   categories: { marginBottom: 20 },
-  map: { height: 270, borderRadius: 25, backgroundColor: '#11132A', overflow: 'hidden', marginBottom: 25, position: 'relative', borderWidth: 1, borderColor: '#29264B' },
-  mapGrid: { ...StyleSheet.absoluteFill, opacity: 0.32, backgroundColor: '#151735' },
-  mapRoad: { position: 'absolute', height: 2, backgroundColor: '#47456B', transform: [{ rotate: '33deg' }] },
-  roadOne: { width: '115%', top: 110, left: -20 },
-  roadTwo: { width: '90%', top: 205, left: 45, transform: [{ rotate: '-17deg' }] },
-  roadThree: { width: '100%', top: 55, left: 45, transform: [{ rotate: '-60deg' }] },
-  mapLabel: { position: 'absolute', left: 20, bottom: 20 },
-  mapLabelText: { color: '#C5BFFF', fontSize: 10, fontWeight: '700', letterSpacing: 1.5 },
-  mapLabelSub: { color: '#777696', fontSize: 11, marginTop: 4 },
-  marker: { position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: '#24214B', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7E6ACF' },
-  markerActive: { backgroundColor: ui.primary, borderColor: ui.primary, width: 42, height: 42, borderRadius: 21, shadowColor: ui.primary, shadowOpacity: 0.8, shadowRadius: 12 },
-  mapControl: { position: 'absolute', right: 14, bottom: 14, width: 36, height: 36, borderRadius: 18, backgroundColor: '#24213C', alignItems: 'center', justifyContent: 'center' },
+  locationBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 16, backgroundColor: '#17152D', marginBottom: 12, borderWidth: 1, borderColor: ui.border },
+  locationStatus: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  locationStatusText: { color: ui.mutedForeground, fontSize: 11 },
+  locationAction: { color: ui.accent, fontSize: 11, fontWeight: '700' },
   placeCard: { borderRadius: 23, overflow: 'hidden', backgroundColor: ui.card, marginBottom: 13 },
   placeImage: { width: '100%', height: 164 },
   placeBody: { padding: 16 },

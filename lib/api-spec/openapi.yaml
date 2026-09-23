@@ -24,6 +24,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /pastport/guide:
+    post:
+      operationId: askPastport
+      tags: [pastport]
+      summary: Ask the contextual historical guide
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskPastportBody"
+      responses:
+        "200":
+          description: Contextual answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PastportGuideResponse"
+        "400":
+          description: Invalid question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +57,39 @@ components:
           type: string
       required:
         - status
+    AskPastportBody:
+      type: object
+      properties:
+        question:
+          type: string
+        site:
+          type: string
+        year:
+          type: integer
+        object:
+          type: string
+      required:
+        - question
+        - site
+        - year
+    PastportGuideResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+        documentedHistory:
+          type: boolean
+        reconstructionNote:
+          type: string
+      required:
+        - answer
+        - documentedHistory
+        - reconstructionNote
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
 

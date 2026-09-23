@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface AskPastportBody {
+  question: string;
+  site: string;
+  year: number;
+  object?: string;
 }
