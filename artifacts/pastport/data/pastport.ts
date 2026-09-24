@@ -77,6 +77,46 @@ export const station = {
   ] satisfies SiteObject[],
 };
 
+export type MapCoordinate = {
+  latitude: number;
+  longitude: number;
+};
+
+export type Province = {
+  name: string;
+  coordinates: MapCoordinate;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
+
+export type HeritagePlace = {
+  id: string;
+  name: string;
+  province: string;
+  coordinates: MapCoordinate;
+};
+
+export const provinces: Province[] = [
+  { name: 'Eastern Cape', coordinates: { latitude: -32.2, longitude: 26.3 }, latitudeDelta: 5.2, longitudeDelta: 5.6 },
+  { name: 'Western Cape', coordinates: { latitude: -33.2, longitude: 20.8 }, latitudeDelta: 4.2, longitudeDelta: 5 },
+  { name: 'Northern Cape', coordinates: { latitude: -29.6, longitude: 21.4 }, latitudeDelta: 6.4, longitudeDelta: 6.2 },
+  { name: 'Free State', coordinates: { latitude: -28.6, longitude: 26.8 }, latitudeDelta: 3.2, longitudeDelta: 3.4 },
+  { name: 'KwaZulu-Natal', coordinates: { latitude: -28.8, longitude: 30.6 }, latitudeDelta: 3.4, longitudeDelta: 2.8 },
+  { name: 'Gauteng', coordinates: { latitude: -26.15, longitude: 28.05 }, latitudeDelta: 0.9, longitudeDelta: 1 },
+  { name: 'North West', coordinates: { latitude: -26.6, longitude: 25.6 }, latitudeDelta: 3.2, longitudeDelta: 3.4 },
+  { name: 'Mpumalanga', coordinates: { latitude: -25.6, longitude: 30.4 }, latitudeDelta: 2.8, longitudeDelta: 2.6 },
+  { name: 'Limpopo', coordinates: { latitude: -23.6, longitude: 29.4 }, latitudeDelta: 3.8, longitudeDelta: 3.4 },
+];
+
+export const places: HeritagePlace[] = [
+  {
+    id: station.id,
+    name: station.name,
+    province: 'Eastern Cape',
+    coordinates: station.coordinates,
+  },
+];
+
 export const trail = {
   id: 'east-london-heritage-trail',
   name: 'East London Heritage Trail',

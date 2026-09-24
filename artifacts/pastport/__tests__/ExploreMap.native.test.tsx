@@ -71,4 +71,38 @@ describe('ExploreMap native marker contract', () => {
     fireEvent.press(screen.getByTestId('map-locate-control'));
     expect(onLocate).toHaveBeenCalledTimes(1);
   });
+
+  it('renders only the supplied visited markers and frames them with the given region', () => {
+    const onPress = jest.fn();
+    const coordinate = { latitude: -33.0153, longitude: 27.9116 };
+    const screen = render(
+      <ExploreMap
+        coordinates={coordinate}
+        latitudeDelta={0.08}
+        longitudeDelta={0.08}
+        markers={[
+          {
+            title: 'East London Railway Station',
+            description: 'Eastern Cape',
+            coordinate,
+            featured: true,
+            onPress,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('native-map').props.initialRegion).toEqual({
+      ...coordinate,
+      latitudeDelta: 0.08,
+      longitudeDelta: 0.08,
+    });
+    const markers = screen.getAllByTestId('map-marker');
+    expect(markers).toHaveLength(1);
+    expect(markers[0].props.title).toBe('East London Railway Station');
+    expect(screen.queryByTestId('map-locate-control')).toBeNull();
+
+    fireEvent.press(markers[0]);
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
 });

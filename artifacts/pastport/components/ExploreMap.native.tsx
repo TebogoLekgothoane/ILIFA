@@ -3,33 +3,66 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { ui } from '@/components/PastportUI';
+import type { ExploreMapMarker, ExploreMapProps } from '@/components/exploreMapTypes';
 
-type ExploreMapProps = {
-  coordinates: { latitude: number; longitude: number };
-  onOpenSite: () => void;
-  onLocate: () => void;
-};
+function defaultMarkers(coordinates: ExploreMapProps['coordinates'], onOpenSite?: () => void): ExploreMapMarker[] {
+  return [
+    {
+      title: 'East London Railway Station',
+      description: 'Walk through its history.',
+      coordinate: coordinates,
+      onPress: onOpenSite,
+      featured: true,
+    },
+    {
+      title: 'Historical Square',
+      coordinate: { latitude: coordinates.latitude + 0.008, longitude: coordinates.longitude + 0.007 },
+    },
+    {
+      title: 'Donkin Reserve',
+      coordinate: { latitude: coordinates.latitude - 0.006, longitude: coordinates.longitude - 0.009 },
+    },
+  ];
+}
 
-export default function ExploreMap({ coordinates, onOpenSite, onLocate }: ExploreMapProps) {
+export default function ExploreMap({
+  coordinates,
+  onOpenSite,
+  onLocate,
+  markers,
+  latitudeDelta = 0.045,
+  longitudeDelta = 0.045,
+  style,
+}: ExploreMapProps) {
+  const pins = markers ?? defaultMarkers(coordinates, onOpenSite);
+
   return (
-    <View style={styles.map}>
+    <View style={[styles.map, style]}>
       <MapView
         style={StyleSheet.absoluteFill}
-        initialRegion={{ ...coordinates, latitudeDelta: 0.045, longitudeDelta: 0.045 }}
+        initialRegion={{ ...coordinates, latitudeDelta, longitudeDelta }}
         showsMyLocationButton={false}
         showsCompass={false}
       >
-        <Marker coordinate={coordinates} onPress={onOpenSite} title="East London Railway Station" description="Walk through its history.">
-          <View style={styles.realMarker}><Feather name="map-pin" size={17} color="#11101A" /></View>
-        </Marker>
-        <Marker coordinate={{ latitude: coordinates.latitude + 0.008, longitude: coordinates.longitude + 0.007 }} title="Historical Square">
-          <View style={styles.smallMarker}><Feather name="map-pin" size={14} color={ui.primary} /></View>
-        </Marker>
-        <Marker coordinate={{ latitude: coordinates.latitude - 0.006, longitude: coordinates.longitude - 0.009 }} title="Donkin Reserve">
-          <View style={styles.smallMarker}><Feather name="map-pin" size={14} color={ui.primary} /></View>
-        </Marker>
+        {pins.map((pin) => (
+          <Marker
+            key={`${pin.title}-${pin.coordinate.latitude}-${pin.coordinate.longitude}`}
+            coordinate={pin.coordinate}
+            onPress={pin.onPress}
+            title={pin.title}
+            description={pin.description}
+          >
+            <View style={pin.featured ? styles.realMarker : styles.smallMarker}>
+              <Feather name="map-pin" size={pin.featured ? 17 : 14} color={pin.featured ? '#11101A' : ui.primary} />
+            </View>
+          </Marker>
+        ))}
       </MapView>
-      <Pressable testID="map-locate-control" onPress={onLocate} style={styles.mapControl}><Feather name="crosshair" size={17} color={ui.foreground} /></Pressable>
+      {onLocate ? (
+        <Pressable testID="map-locate-control" onPress={onLocate} style={styles.mapControl}>
+          <Feather name="crosshair" size={17} color={ui.foreground} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

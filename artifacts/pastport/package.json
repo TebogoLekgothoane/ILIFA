@@ -69,12 +69,12 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.8",
-    "@react-three/fiber": "^9.7.0",
     "expo-audio": "~57.0.5",
     "expo-camera": "~57.0.5",
+    "expo-file-system": "~57.0.7",
     "expo-gl": "^57.0.2",
+    "expo-three": "7.0.1",
     "react-native-maps": "1.18.0",
-    "three": "^0.186.0"
+    "three": "0.145.0"
   }
 }

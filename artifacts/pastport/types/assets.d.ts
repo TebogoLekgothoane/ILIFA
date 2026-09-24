@@ -12,3 +12,22 @@ declare module '*.wav' {
   const value: number;
   export default value;
 }
+
+declare module '*.glb' {
+  const value: number;
+  export default value;
+}
+
+declare module 'expo-gl' {
+  export const GLView: any;
+}
+
+declare module 'expo-three' {
+  export const Renderer: any;
+  export const THREE: any;
+  export const loadAsync: any;
+}
+
+declare module 'three/examples/jsm/loaders/GLTFLoader' {
+  export const GLTFLoader: any;
+}

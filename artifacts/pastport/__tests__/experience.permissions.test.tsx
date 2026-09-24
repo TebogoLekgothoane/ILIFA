@@ -31,6 +31,10 @@ jest.mock('expo-linear-gradient', () => ({
   LinearGradient: () => null,
 }));
 
+jest.mock('@/components/HistoricalModel', () => ({
+  HistoricalModel: () => null,
+}));
+
 jest.mock('@/components/NarrationPlayer', () => ({
   NarrationPlayer: () => null,
 }));
@@ -53,14 +57,14 @@ describe('ExperienceScreen camera permissions', () => {
   it('mounts the camera as soon as the permission request succeeds', async () => {
     const screen = render(<ExperienceScreen />);
 
-    expect(screen.getByText('Your camera is the time machine')).toBeTruthy();
+    expect(screen.getByText('Camera access is needed to experience the past.')).toBeTruthy();
     await act(async () => {
-      fireEvent.press(screen.getByText('Enable camera'));
+      fireEvent.press(screen.getByText('Enable Camera'));
     });
 
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('camera-view')).toBeTruthy();
-    expect(screen.queryByText('Your camera is the time machine')).toBeNull();
+    expect(screen.queryByText('Camera access is needed to experience the past.')).toBeNull();
   });
 
   it('renders the camera after permission is granted', () => {
@@ -70,7 +74,7 @@ describe('ExperienceScreen camera permissions', () => {
     screen.rerender(<ExperienceScreen />);
 
     expect(screen.getByTestId('camera-view')).toBeTruthy();
-    expect(screen.queryByText('Your camera is the time machine')).toBeNull();
+    expect(screen.queryByText('Camera access is needed to experience the past.')).toBeNull();
   });
 
   it('shows the non-retry copy when camera access cannot be requested again', () => {

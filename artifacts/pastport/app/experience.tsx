@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +8,23 @@ import { station, periods, SiteObject } from '@/data/pastport';
 import { usePastport } from '@/context/PastportContext';
 import { IconButton, Pill, ui } from '@/components/PastportUI';
 import { NarrationPlayer } from '@/components/NarrationPlayer';
-import { HistoricalModel } from '@/components/HistoricalModel';
+import { HistoricalModel, ModelTransform } from '@/components/HistoricalModel';
+import { HistoricalHotspot, Hotspot } from '@/components/HistoricalHotspot';
+import { ModelControls } from '@/components/ModelControls';
+import { SourceCard } from '@/components/SourceCard';
+import { ShowMeThenCamera } from '@/components/ShowMeThenCamera';
+
+const INITIAL_MODEL_TRANSFORM: ModelTransform = {
+  scale: 0.08,
+  position: [0, -0.65, 0],
+  rotation: [0, 0, 0],
+};
+
+const MODEL_HOTSPOTS: Hotspot[] = [
+  { id: 'arrival-hall', title: 'Arrival Hall', detail: 'Reconstruction detail — explore the main arrival area represented in this prototype model.', x: 50, y: 43 },
+  { id: 'railway-clock', title: 'Railway Clock', detail: 'Reconstruction detail — the clock is included as a visible architectural feature in the model.', x: 52, y: 30 },
+  { id: 'platform', title: 'Platform', detail: 'Reconstruction detail — the platform canopy and station edge are represented in this exterior model.', x: 74, y: 61 },
+];
 
 export default function ExperienceScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -16,9 +32,15 @@ export default function ExperienceScreen() {
   const [year, setYear] = useState(selectedYear || 1920);
   const [revealed, setRevealed] = useState(false);
   const [selectedObject, setSelectedObject] = useState<SiteObject | null>(null);
+  const [selectedHotspot, setSelectedHotspot] = useState<Hotspot | null>(null);
   const [narrating, setNarrating] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraGranted, setCameraGranted] = useState(false);
+  const [modelTransform, setModelTransform] = useState<ModelTransform>(INITIAL_MODEL_TRANSFORM);
+  const [modelOpacity, setModelOpacity] = useState(0.72);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [aligning, setAligning] = useState(false);
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const stationOpacity = useRef(new Animated.Value(1)).current;
 
@@ -35,8 +57,9 @@ export default function ExperienceScreen() {
 
   function showThen() {
     setRevealed(true);
-    setYear(1920);
-    setSelectedYear(1920);
+    setYear(1950);
+    setSelectedYear(1950);
+    setModelError(null);
     setNarrating(true);
     markVisited(station.id);
   }
@@ -67,24 +90,39 @@ export default function ExperienceScreen() {
   }
 
   const cameraUnavailable = !cameraGranted || Boolean(cameraError);
+  const modelVisible = revealed && year === 1950 && !cameraUnavailable;
+
+  function selectYear(nextYear: number) {
+    setYear(nextYear);
+    setSelectedYear(nextYear);
+    setSelectedHotspot(null);
+    setAligning(false);
+    setRevealed(nextYear !== 2026);
+    if (nextYear === 1950) setModelError(null);
+  }
 
   return (
     <View style={styles.screen}>
-      {!cameraUnavailable ? <CameraView style={styles.camera} facing="back" onMountError={handleCameraMountError} /> : <View style={styles.cameraFallback}><Feather name="camera-off" size={24} color={ui.primary} /><Text style={styles.permissionTitle}>{cameraError ? 'Camera unavailable' : 'Your camera is the time machine'}</Text><Text style={styles.permissionCopy}>{cameraError || 'Enable camera access to see the real place behind the historical layer.'}</Text><Pressable onPress={requestCameraAccess} style={styles.permissionButton}><Text style={styles.permissionButtonText}>{permission?.canAskAgain === false ? 'Open camera settings' : 'Enable camera'}</Text></Pressable></View>}
+      <ShowMeThenCamera granted={!cameraUnavailable} canAskAgain={permission?.canAskAgain} error={cameraError} onMountError={handleCameraMountError} onRequestAccess={requestCameraAccess} />
       <Animated.View pointerEvents="none" style={[styles.cameraTint, { opacity: stationOpacity }]}><LinearGradient colors={['rgba(7,7,17,0.4)', 'transparent', 'rgba(7,7,17,0.92)']} style={StyleSheet.absoluteFill} /></Animated.View>
-      <HistoricalModel visible={revealed} />
+      <HistoricalModel visible={modelVisible} opacity={modelOpacity} transform={modelTransform} onLoadingChange={setModelLoading} onError={setModelError} />
       <View style={styles.top}><IconButton name="x" onPress={() => router.back()} /><View style={styles.mode}><View style={styles.modeDot} /><Text style={styles.modeText}>PASTPORT · {year}</Text></View><IconButton name="help-circle" onPress={() => router.push('/chat')} /></View>
       <View style={styles.scanLine} />
       <View style={[styles.corner, styles.topLeft]} /><View style={[styles.corner, styles.topRight]} /><View style={[styles.corner, styles.bottomLeft]} /><View style={[styles.corner, styles.bottomRight]} />
-      <View style={styles.cameraLabel}><Text style={styles.cameraEyebrow}>{revealed ? 'AI RECONSTRUCTION' : 'CURRENT LOCATION'}</Text><Text style={styles.cameraTitle}>{revealed ? `East London · ${year}` : 'East London Railway Station'}</Text><Text style={styles.cameraCopy}>{revealed ? 'Prototype reconstruction based on historical photographs and archival references' : 'Point your camera at a place with a story'}</Text></View>
-      {revealed ? station.objects.map((object) => <ObjectHotspot key={object.id} object={object} onPress={() => setSelectedObject(object)} />) : null}
+      <View style={styles.cameraLabel}><Text style={styles.cameraEyebrow}>{revealed ? 'HISTORICAL RECONSTRUCTION' : 'DEMO LOCATION'}</Text><Text style={styles.cameraTitle}>{revealed ? `East London · ${year}` : 'East London Railway Station'}</Text><Text style={styles.cameraCopy}>{year === 1920 && revealed ? '1920 reconstruction coming soon.' : revealed ? 'Based on historical photographs and archival references.' : 'East London Railway Station · demo mode'}</Text></View>
+      {modelVisible ? MODEL_HOTSPOTS.map((hotspot) => <HistoricalHotspot key={hotspot.id} hotspot={hotspot} onPress={() => setSelectedHotspot(hotspot)} />) : null}
+      {modelVisible ? <ModelControls aligning={aligning} opacity={modelOpacity} transform={modelTransform} onAlign={() => setAligning((current) => !current)} onOpacityChange={setModelOpacity} onReset={() => { setModelTransform(INITIAL_MODEL_TRANSFORM); setModelOpacity(0.72); setAligning(false); }} onTransformChange={setModelTransform} /> : null}
+      {modelLoading ? <View style={styles.modelStatus}><Text style={styles.modelStatusText}>Reconstructing the past…</Text></View> : null}
+      {modelError ? <View style={styles.modelError}><Text style={styles.modelErrorTitle}>Unable to load the historical reconstruction.</Text><Pressable onPress={() => { setModelError(null); setRevealed(false); requestAnimationFrame(() => setRevealed(true)); }}><Text style={styles.modelErrorAction}>Try again</Text></Pressable></View> : null}
       {selectedObject ? <ObjectCard object={selectedObject} onClose={() => setSelectedObject(null)} onAsk={() => router.push('/chat')} /> : null}
+      {selectedHotspot ? <SourceCard title={selectedHotspot.title} detail={selectedHotspot.detail} onClose={() => setSelectedHotspot(null)} /> : null}
       {narrating && !selectedObject ? <View style={styles.narration}><NarrationPlayer compact autoPlay={narrating} /></View> : null}
       <View style={styles.bottom}>
         {!revealed ? <Pressable testID="show-me-then" onPress={showThen} style={({ pressed }) => [styles.showButton, pressed && styles.pressed]}><View><Text style={styles.showEyebrow}>THE TIME MACHINE</Text><Text style={styles.showTitle}>SHOW ME THEN</Text></View><View style={styles.showArrow}><Feather name="arrow-up-right" size={20} color="#0B0A13" /></View></Pressable> : <View style={styles.revealedActions}><Pressable style={styles.askButton} onPress={() => router.push('/chat')}><Feather name="message-circle" size={17} color={ui.primary} /><Text style={styles.askText}>Ask about this place</Text></Pressable><Pressable style={styles.listenButton} onPress={() => setNarrating((current) => !current)}><Feather name={narrating ? 'pause' : 'play'} size={16} color={ui.foreground} /></Pressable></View>}
         <View style={styles.timeHeader}><Text style={styles.timeLabel}>TIME TRAVEL</Text><Text style={styles.timeValue}>{year}</Text></View>
-        <View style={styles.yearChips}>{periods.map((period) => <Pill key={period.year} label={String(period.year)} active={year === period.year} onPress={() => { setYear(period.year); setSelectedYear(period.year); setRevealed(period.year !== 2026); }} />)}</View>
-        <View style={styles.disclaimer}><Feather name="info" size={12} color={ui.mutedForeground} /><Text style={styles.disclaimerText}>{revealed ? 'AI-generated reconstruction based on available historical sources.' : 'The present-day view stays anchored to the place you are standing.'}</Text></View>
+        <View style={styles.yearChips}>{periods.map((period) => <Pill key={period.year} label={String(period.year)} active={year === period.year} onPress={() => selectYear(period.year)} />)}</View>
+        <View style={styles.disclaimer}><Feather name="info" size={12} color={ui.mutedForeground} /><Text style={styles.disclaimerText}>{revealed ? 'Prototype reconstruction, not automatic AR tracking.' : 'The present-day view stays anchored to the place you are standing.'}</Text></View>
+        {__DEV__ ? <Pressable onPress={() => router.push('/glb-test')}><Text style={styles.glbTestLink}>Test bundled GLB</Text></Pressable> : null}
       </View>
     </View>
   );
@@ -130,6 +168,11 @@ const styles = StyleSheet.create({
   cameraEyebrow: { color: '#EDC48C', fontSize: 9, fontWeight: '700', letterSpacing: 1.5 },
   cameraTitle: { color: ui.foreground, fontSize: 23, fontWeight: '700', marginTop: 7 },
   cameraCopy: { color: '#D1CCD9', fontSize: 12, marginTop: 4 },
+  modelStatus: { position: 'absolute', zIndex: 8, top: '47%', alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 14, backgroundColor: 'rgba(16,13,31,0.88)', borderWidth: 1, borderColor: '#68549A' },
+  modelStatusText: { color: ui.primary, fontSize: 11, fontWeight: '700' },
+  modelError: { position: 'absolute', zIndex: 9, left: 28, right: 28, top: '43%', alignItems: 'center', padding: 16, borderRadius: 17, backgroundColor: 'rgba(28,20,41,0.96)', borderWidth: 1, borderColor: '#72528D' },
+  modelErrorTitle: { color: ui.foreground, fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  modelErrorAction: { color: ui.primary, fontSize: 12, fontWeight: '700', marginTop: 10 },
   hotspot: { position: 'absolute', zIndex: 4, alignItems: 'center', transform: [{ translateX: -24 }] },
   hotspotRing: { width: 35, height: 35, borderRadius: 18, borderWidth: 1, borderColor: ui.accent, backgroundColor: 'rgba(185,156,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   hotspotDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: ui.foreground },
@@ -149,6 +192,7 @@ const styles = StyleSheet.create({
   yearChips: { flexDirection: 'row' },
   disclaimer: { flexDirection: 'row', gap: 6, alignItems: 'center', marginTop: 10 },
   disclaimerText: { color: '#A19CAA', fontSize: 9, flex: 1 },
+  glbTestLink: { color: '#BBA8F0', fontSize: 9, fontWeight: '700', textAlign: 'center', marginTop: 9 },
   narration: { position: 'absolute', left: 18, right: 18, bottom: 244, zIndex: 5, borderRadius: 18, padding: 12, backgroundColor: 'rgba(21,18,42,0.93)', borderWidth: 1, borderColor: '#554A85', flexDirection: 'row', alignItems: 'center', gap: 10 },
   narrationIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#2E2754', alignItems: 'center', justifyContent: 'center' },
   narrationTitle: { color: ui.accent, fontSize: 10, fontWeight: '700' },
