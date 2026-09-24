@@ -35,16 +35,16 @@ export function ModelOrbitSurface({ transform, onTransformChange, children, styl
       if (touches.length > 1 && start.distance) {
         const nextDistance = distance(touches[0], touches[1]);
         onChangeRef.current({
-          ...start.transform,
-          scale: clamp(start.transform.scale * (nextDistance / start.distance), 0.35, 2.5),
+          ...transformRef.current,
+          scale: clamp(start.transform.scale * (nextDistance / start.distance), 0.25, 3.2),
         });
         return;
       }
       onChangeRef.current({
         ...start.transform,
         rotation: [
-          clamp(start.transform.rotation[0] + gesture.dy * 0.007, -0.9, 0.9),
-          start.transform.rotation[1] + gesture.dx * 0.012,
+          clamp(start.transform.rotation[0] + gesture.dy * 0.01, -Math.PI / 2 + 0.05, Math.PI / 2 - 0.05),
+          start.transform.rotation[1] + gesture.dx * 0.018,
           start.transform.rotation[2],
         ],
       });
@@ -74,7 +74,7 @@ export function ModelControls({ opacity, onOpacityChange, onReset, onTurn }: Mod
     <View style={styles.controls}>
       <View style={styles.turnRow}>
         <Pressable onPress={() => onTurn(-1)} style={styles.iconButton} accessibilityLabel="Turn left"><Feather name="rotate-ccw" size={14} color={ui.foreground} /></Pressable>
-        <Text style={styles.hint}>Drag to turn the station</Text>
+        <Text style={styles.hint}>Drag to orbit · pinch to zoom</Text>
         <Pressable onPress={() => onTurn(1)} style={styles.iconButton} accessibilityLabel="Turn right"><Feather name="rotate-cw" size={14} color={ui.foreground} /></Pressable>
         <Pressable onPress={onReset} style={styles.iconButton} accessibilityLabel="Reset view"><Feather name="refresh-cw" size={14} color={ui.primary} /></Pressable>
       </View>

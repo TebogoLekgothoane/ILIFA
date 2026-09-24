@@ -1,8 +1,10 @@
 import { Feather } from '@expo/vector-icons';
-import { useCameraPermissions } from 'expo-camera';
+// Demo mode uses a looping location video instead of the live camera.
+// import { useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+// import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { station, periods } from '@/data/pastport';
 import eastLondonHistoryVideo from '@/assets/audio/East London History Video.mp4';
@@ -20,9 +22,9 @@ import { StoryVideoSheet } from '@/components/StoryVideoSheet';
 import { ShowMeThenCamera } from '@/components/ShowMeThenCamera';
 
 const INITIAL_MODEL_TRANSFORM: ModelTransform = {
-  scale: 1.45,
-  position: [0, 0.25, 0],
-  rotation: [0.12, 0.55, 0],
+  scale: 1.05,
+  position: [0, 0.1, 0],
+  rotation: [0.06, 0, 0],
 };
 
 const SCAN_MS = 2200;
@@ -75,24 +77,24 @@ type ExperiencePhase = 'idle' | 'scanning' | 'detected' | 'ready';
 
 export default function ExperienceScreen() {
   const { height } = useWindowDimensions();
-  const [permission, requestPermission] = useCameraPermissions();
+  // const [permission, requestPermission] = useCameraPermissions();
   const { selectedYear, setSelectedYear, markVisited } = usePastport();
   const [year, setYear] = useState(selectedYear || 1920);
   const [phase, setPhase] = useState<ExperiencePhase>('idle');
   const [selectedStory, setSelectedStory] = useState<StoryAd | null>(null);
   const [narrating, setNarrating] = useState(false);
   const [askIlifaOpen, setAskIlifaOpen] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [cameraGranted, setCameraGranted] = useState(false);
+  // const [cameraError, setCameraError] = useState<string | null>(null);
+  // const [cameraGranted, setCameraGranted] = useState(false);
   const [modelTransform, setModelTransform] = useState<ModelTransform>(INITIAL_MODEL_TRANSFORM);
   const [modelOpacity, setModelOpacity] = useState(0.92);
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const stageHeight = Math.min(300, Math.max(188, Math.round(height * 0.32)));
 
-  useEffect(() => {
-    setCameraGranted(Boolean(permission?.granted));
-  }, [permission?.granted]);
+  // useEffect(() => {
+  //   setCameraGranted(Boolean(permission?.granted));
+  // }, [permission?.granted]);
 
   useEffect(() => {
     if (phase !== 'scanning' && phase !== 'detected') return undefined;
@@ -116,32 +118,30 @@ export default function ExperienceScreen() {
     markVisited(station.id);
   }
 
-  async function requestCameraAccess() {
-    setCameraError(null);
+  // async function requestCameraAccess() {
+  //   setCameraError(null);
+  //   if (permission?.canAskAgain === false) {
+  //     await Linking.openSettings();
+  //     return;
+  //   }
+  //   try {
+  //     const nextPermission = await requestPermission();
+  //     if (nextPermission?.granted) {
+  //       setCameraGranted(true);
+  //     } else if (nextPermission) {
+  //       setCameraGranted(false);
+  //       setCameraError('Camera access was not granted. You can enable it to continue.');
+  //     }
+  //   } catch {
+  //     setCameraError('We could not start camera access. Check your device settings and try again.');
+  //   }
+  // }
 
-    if (permission?.canAskAgain === false) {
-      await Linking.openSettings();
-      return;
-    }
+  // function handleCameraMountError({ message }: { message: string }) {
+  //   setCameraError(message || 'The camera could not be started on this device.');
+  // }
 
-    try {
-      const nextPermission = await requestPermission();
-      if (nextPermission?.granted) {
-        setCameraGranted(true);
-      } else if (nextPermission) {
-        setCameraGranted(false);
-        setCameraError('Camera access was not granted. You can enable it to continue.');
-      }
-    } catch {
-      setCameraError('We could not start camera access. Check your device settings and try again.');
-    }
-  }
-
-  function handleCameraMountError({ message }: { message: string }) {
-    setCameraError(message || 'The camera could not be started on this device.');
-  }
-
-  const cameraUnavailable = !cameraGranted || Boolean(cameraError);
+  // const cameraUnavailable = !cameraGranted || Boolean(cameraError);
   const modelVisible = phase === 'ready' && year === 1950;
 
   function selectYear(nextYear: number) {
@@ -178,15 +178,29 @@ export default function ExperienceScreen() {
   function turnModel(direction: -1 | 1) {
     setModelTransform((current) => ({
       ...current,
-      rotation: [current.rotation[0], current.rotation[1] + direction * 0.45, current.rotation[2]],
+      rotation: [current.rotation[0], current.rotation[1] + direction * (Math.PI / 2), current.rotation[2]],
     }));
   }
 
   return (
     <View style={styles.screen}>
       <StationAmbience playing={phase === 'ready'} volume={selectedStory || askIlifaOpen ? 0.12 : 0.34} />
+      <ShowMeThenCamera
+        granted
+        canAskAgain
+        error={null}
+        onMountError={() => undefined}
+        onRequestAccess={() => undefined}
+      />
+      {/* Live camera path kept for later:
       <ShowMeThenCamera granted={!cameraUnavailable} canAskAgain={permission?.canAskAgain} error={cameraError} onMountError={handleCameraMountError} onRequestAccess={requestCameraAccess} />
+      */}
       <View pointerEvents="none" style={styles.cameraTint}><LinearGradient colors={['rgba(7,7,17,0.28)', 'transparent', 'rgba(7,7,17,0.55)']} style={StyleSheet.absoluteFill} /></View>
+      {phase === 'scanning' ? (
+        <View pointerEvents="none" style={styles.scanOverlay} testID="full-scan-overlay">
+          <ArRecognition phase="scanning" fullScreen />
+        </View>
+      ) : null}
       <View style={styles.hud} pointerEvents="box-none">
         <View style={styles.top}>
           <IconButton name="x" onPress={() => router.back()} />
@@ -194,9 +208,10 @@ export default function ExperienceScreen() {
           <IconButton name="help-circle" onPress={() => router.push('/chat')} />
         </View>
 
+        {phase === 'scanning' ? <View style={styles.storySpacer} /> : (
         <View style={[styles.stage, { height: stageHeight }]} testID="model-stage">
           {phase === 'idle' ? <IdleViewfinder /> : null}
-          {phase === 'scanning' || phase === 'detected' ? <ArRecognition phase={phase} /> : null}
+          {phase === 'detected' ? <ArRecognition phase={phase} /> : null}
           {phase === 'ready' && year === 1920 ? <View style={styles.comingSoon}><Text style={styles.comingSoonTitle}>1920 reconstruction coming soon.</Text><Text style={styles.comingSoonCopy}>The 1950 station model is the one you can turn.</Text></View> : null}
           {modelVisible ? (
             <ModelOrbitSurface style={styles.modelViewport} transform={modelTransform} onTransformChange={setModelTransform}>
@@ -207,6 +222,7 @@ export default function ExperienceScreen() {
           ) : null}
           {modelVisible ? <ModelControls opacity={modelOpacity} onOpacityChange={setModelOpacity} onReset={() => { setModelTransform(INITIAL_MODEL_TRANSFORM); setModelOpacity(0.92); }} onTurn={turnModel} /> : null}
         </View>
+        )}
 
         {phase === 'ready' ? <StoryAds stories={STORY_ADS} selectedId={selectedStory?.id ?? null} onSelect={(story) => { setNarrating(false); setSelectedStory(story); }} /> : <View style={styles.storySpacer} />}
 
@@ -229,12 +245,16 @@ export default function ExperienceScreen() {
               <Pressable style={styles.askButton} onPress={openAskIlifa} testID="ask-ilifa-open"><Feather name="mic" size={17} color={ui.primary} /><Text style={styles.askText}>Ask Ilifa</Text></Pressable>
               <Pressable style={styles.listenButton} onPress={() => setNarrating((current) => !current)}><Feather name={narrating ? 'pause' : 'play'} size={16} color={ui.foreground} /></Pressable>
             </View>
-          ) : phase === 'ready' ? null : (
-            <View style={styles.scanStatus}><Text style={styles.scanStatusText}>{phase === 'scanning' ? 'Scanning the building…' : 'Station recognised'}</Text></View>
+          ) : phase === 'ready' ? null : phase === 'scanning' ? null : (
+            <View style={styles.scanStatus}><Text style={styles.scanStatusText}>Station recognised</Text></View>
           )}
-          <View style={styles.timeHeader}><Text style={styles.timeLabel}>TIME TRAVEL</Text><Text style={styles.timeValue}>{year}</Text></View>
-          <View style={styles.yearChips}>{periods.map((period) => <Pill key={period.year} label={String(period.year)} active={year === period.year} onPress={() => selectYear(period.year)} />)}</View>
-          <View style={styles.disclaimer}><Feather name="info" size={12} color={ui.mutedForeground} /><Text style={styles.disclaimerText}>{phase === 'ready' ? 'Simulated recognition. Drag the model to see the station from other angles.' : 'Point the camera at the building, then ask to see it then.'}</Text></View>
+          {phase === 'scanning' ? null : (
+            <>
+              <View style={styles.timeHeader}><Text style={styles.timeLabel}>TIME TRAVEL</Text><Text style={styles.timeValue}>{year}</Text></View>
+              <View style={styles.yearChips}>{periods.map((period) => <Pill key={period.year} label={String(period.year)} active={year === period.year} onPress={() => selectYear(period.year)} />)}</View>
+              <View style={styles.disclaimer}><Feather name="info" size={12} color={ui.mutedForeground} /><Text style={styles.disclaimerText}>{phase === 'ready' ? 'Simulated recognition. Drag the model to see the station from other angles.' : 'Demo camera feed. Point at the building, then ask to see it then.'}</Text></View>
+            </>
+          )}
         </View>
       </View>
       {selectedStory ? <StoryVideoSheet key={selectedStory.id} story={selectedStory} onClose={() => setSelectedStory(null)} /> : null}
@@ -259,6 +279,7 @@ function IdleViewfinder() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#070711' },
   cameraTint: { ...StyleSheet.absoluteFill, zIndex: 1 },
+  scanOverlay: { ...StyleSheet.absoluteFill, zIndex: 3 },
   hud: { ...StyleSheet.absoluteFill, zIndex: 4, paddingTop: 54, paddingBottom: 16, paddingHorizontal: 16 },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   mode: { paddingVertical: 9, paddingHorizontal: 14, borderRadius: 20, backgroundColor: 'rgba(10,9,21,0.72)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', flexDirection: 'row', alignItems: 'center', gap: 8 },
