@@ -6,6 +6,7 @@ import * as Location from 'expo-location';
 import { IconButton, Pill, ScreenShell, SectionHeading, TopBar, ui } from '@/components/PastportUI';
 import { station, trail } from '@/data/pastport';
 import ExploreMap from '@/components/ExploreMap';
+import { openDirections } from '@/lib/directions';
 
 const categories = ['All', 'Nearby', 'Historical Sites', 'People', 'Events', 'Trails'];
 
@@ -30,7 +31,12 @@ export default function ExploreScreen() {
       </ScrollView>
 
       <View style={styles.locationBar}><View style={styles.locationStatus}><Feather name={permission?.granted ? 'navigation' : 'map-pin'} size={14} color={permission?.granted ? '#78D6A2' : ui.accent} /><Text style={styles.locationStatusText}>{permission?.granted && userLocation ? 'Showing your live location' : 'Use your live location to find nearby stories'}</Text></View><Pressable onPress={useCurrentLocation}><Text style={styles.locationAction}>{permission?.granted ? 'Refresh' : 'Enable GPS'}</Text></Pressable></View>
-      <ExploreMap coordinates={station.coordinates} onOpenSite={() => router.push('/site')} onLocate={useCurrentLocation} />
+      <ExploreMap
+        coordinates={station.coordinates}
+        onOpenSite={() => router.push('/site')}
+        onLocate={useCurrentLocation}
+        onNavigate={() => openDirections(station.coordinates, station.name)}
+      />
 
       <SectionHeading title="Stories near you" action="List view" onAction={() => undefined} />
       <Pressable style={styles.placeCard} onPress={() => router.push('/site')}>

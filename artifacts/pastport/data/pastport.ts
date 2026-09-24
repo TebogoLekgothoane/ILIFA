@@ -127,11 +127,11 @@ export const trail = {
     'A self-guided walk through the city’s railway, civic, and coastal histories.',
   image: trailHero,
   locations: [
-    { name: 'Railway Station', time: 'Start here', period: '1920', done: true },
-    { name: 'Historical Square', time: '12 min walk', period: '1910', done: true },
-    { name: 'Donkin Reserve', time: '18 min walk', period: '1820', done: true },
-    { name: 'Fort Glamorgan', time: '25 min walk', period: '1847', done: false },
-    { name: 'East London Museum', time: '20 min walk', period: 'Present', done: false },
+    { name: 'Railway Station', time: 'Start here', period: '1920', done: true, coordinates: station.coordinates },
+    { name: 'Historical Square', time: '12 min walk', period: '1910', done: true, coordinates: { latitude: -33.01474, longitude: 27.90418 } },
+    { name: "Latimer's Landing", time: '18 min walk', period: '1938', done: true, coordinates: { latitude: -33.02201, longitude: 27.89522 } },
+    { name: 'Fort Glamorgan', time: '25 min walk', period: '1847', done: false, coordinates: { latitude: -33.03012, longitude: 27.90396 } },
+    { name: 'East London Museum', time: '20 min walk', period: 'Present', done: false, coordinates: { latitude: -32.99591, longitude: 27.89539 } },
   ],
 };
 

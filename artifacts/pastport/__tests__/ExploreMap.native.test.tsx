@@ -72,6 +72,21 @@ describe('ExploreMap native marker contract', () => {
     expect(onLocate).toHaveBeenCalledTimes(1);
   });
 
+  it('starts navigation from the bottom-left control', () => {
+    const onNavigate = jest.fn();
+    const screen = render(
+      <ExploreMap
+        coordinates={{ latitude: -33.0153, longitude: 27.9116 }}
+        onOpenSite={jest.fn()}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    fireEvent.press(screen.getByTestId('map-navigate-control'));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Start navigation')).toBeTruthy();
+  });
+
   it('renders only the supplied visited markers and frames them with the given region', () => {
     const onPress = jest.fn();
     const coordinate = { latitude: -33.0153, longitude: 27.9116 };

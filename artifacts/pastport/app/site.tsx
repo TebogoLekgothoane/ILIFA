@@ -7,6 +7,7 @@ import { station, periods } from '@/data/pastport';
 import { usePastport } from '@/context/PastportContext';
 import { IconButton, PrimaryButton, ui } from '@/components/PastportUI';
 import { NarrationPlayer } from '@/components/NarrationPlayer';
+import { StationAmbience } from '@/components/StationAmbience';
 
 export default function SiteScreen() {
   const { savedSites, toggleSaved, setSelectedYear } = usePastport();
@@ -15,6 +16,7 @@ export default function SiteScreen() {
   const saved = savedSites.includes(station.id);
   return (
     <View style={styles.screen}>
+      <StationAmbience />
       <ImageBackground source={station.hero} style={styles.cover}>
         <LinearGradient colors={['rgba(8,8,18,0.36)', 'rgba(8,8,18,0.98)']} style={StyleSheet.absoluteFill} />
         <View style={styles.top}><IconButton name="arrow-left" onPress={() => router.back()} /><IconButton name={saved ? 'bookmark' : 'bookmark'} active={saved} onPress={() => toggleSaved(station.id)} /></View>
@@ -23,7 +25,7 @@ export default function SiteScreen() {
       <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 45 }} showsVerticalScrollIndicator={false}>
         <Text style={styles.description}>{station.description}</Text>
         <View style={styles.actionRow}><Pressable style={styles.action} onPress={() => router.push('/experience')}><View style={styles.actionIcon}><Feather name="maximize" size={18} color={ui.primary} /></View><Text style={styles.actionText}>Experience{'\n'}in AR</Text></Pressable><Pressable style={styles.action} onPress={() => setShowPlayer((current) => !current)}><View style={styles.actionIcon}><Feather name="volume-2" size={18} color={ui.accent} /></View><Text style={styles.actionText}>Listen to{'\n'}story</Text></Pressable><Pressable style={styles.action} onPress={() => undefined}><View style={styles.actionIcon}><Feather name="clock" size={18} color={ui.accent} /></View><Text style={styles.actionText}>Explore{'\n'}timeline</Text></Pressable><Pressable style={styles.action} onPress={() => router.push('/chat')}><View style={styles.actionIcon}><Feather name="message-circle" size={18} color={ui.accent} /></View><Text style={styles.actionText}>Ask{'\n'}PASTPORT</Text></Pressable></View>
-        {showPlayer ? <View style={styles.player}><NarrationPlayer /></View> : null}
+        {showPlayer ? <View style={styles.player}><NarrationPlayer autoPlay /></View> : null}
         <View style={styles.timelineHeader}><Text style={styles.sectionTitle}>A place in time</Text><Text style={styles.timelineValue}>{year}</Text></View>
         <View style={styles.yearRow}>{periods.map((period) => <Pressable key={period.year} onPress={() => { setYear(period.year); setSelectedYear(period.year); }}><Text style={[styles.year, year === period.year && styles.yearActive]}>{period.year}</Text></Pressable>)}</View>
         <View style={styles.timelineTrack}><View style={[styles.timelineFill, { width: year === 2026 ? '100%' : year === 1950 ? '55%' : '18%' }]} /><View style={[styles.timelineKnob, { left: year === 2026 ? '96%' : year === 1950 ? '55%' : '18%' }]} /></View>

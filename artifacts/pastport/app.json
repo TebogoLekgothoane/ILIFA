@@ -11,12 +11,14 @@
       "supportsTablet": false,
       "infoPlist": {
         "NSCameraUsageDescription": "PASTPORT uses the camera to place historical reconstructions over the real location.",
-        "NSLocationWhenInUseUsageDescription": "PASTPORT uses your location to find nearby historical places."
+        "NSLocationWhenInUseUsageDescription": "PASTPORT uses your location to find nearby historical places.",
+        "NSMicrophoneUsageDescription": "Ilifa uses the microphone so you can ask questions about this historical place."
       }
     },
     "android": {
       "permissions": [
         "CAMERA",
+        "RECORD_AUDIO",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
       ]
@@ -26,7 +28,13 @@
     },
     "plugins": [
       "expo-router",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Ilifa uses the microphone so you can ask questions about this historical place."
+        }
+      ],
+      "expo-video",
       [
         "expo-camera",
         {

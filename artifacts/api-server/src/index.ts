@@ -1,13 +1,10 @@
 import app from "./app";
+import { loadBackendEnv } from "./lib/loadEnv";
 import { logger } from "./lib/logger";
 
-const rawPort = process.env["PORT"];
+loadBackendEnv();
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+const rawPort = process.env["PORT"] ?? "5000";
 
 const port = Number(rawPort);
 

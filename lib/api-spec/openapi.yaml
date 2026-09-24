@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: ilifa
+    description: Ask Ilifa heritage guide
 paths:
   /healthz:
     get:
@@ -44,6 +46,42 @@ paths:
                 $ref: "#/components/schemas/PastportGuideResponse"
         "400":
           description: Invalid question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /ilifa/ask:
+    post:
+      operationId: askIlifa
+      tags: [ilifa]
+      summary: Ask Ilifa a grounded heritage question
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AskIlifaBody"
+      responses:
+        "200":
+          description: Spoken heritage answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AskIlifaResponse"
+        "400":
+          description: Invalid question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Guide failure
           content:
             application/json:
               schema:
@@ -90,6 +128,58 @@ components:
       properties:
         message:
           type: string
+        code:
+          type: string
       required:
         - message
+    AskIlifaBody:
+      type: object
+      properties:
+        site:
+          type: string
+        period:
+          type: string
+        question:
+          type: string
+        audioBase64:
+          type: string
+        audioMimeType:
+          type: string
+        selectedFeature:
+          type: string
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              question:
+                type: string
+              answer:
+                type: string
+            required:
+              - question
+              - answer
+    AskIlifaResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+        question:
+          type: string
+        audioUrl:
+          type: string
+          nullable: true
+        audioBase64:
+          type: string
+          nullable: true
+        audioMimeType:
+          type: string
+          nullable: true
+        sourceTopics:
+          type: array
+          items:
+            type: string
+      required:
+        - answer
+        - sourceTopics
 

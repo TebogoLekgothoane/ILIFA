@@ -1,66 +1,85 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Feather } from '@expo/vector-icons';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { ModelTransform } from '@/components/HistoricalModel';
 import { ui } from '@/components/PastportUI';
 
-type ModelControlsProps = {
-  aligning: boolean;
-  opacity: number;
+type ModelOrbitSurfaceProps = {
   transform: ModelTransform;
-  onAlign: () => void;
-  onOpacityChange: (value: number) => void;
-  onReset: () => void;
   onTransformChange: (value: ModelTransform) => void;
+  children: React.ReactNode;
+  style?: ViewStyle;
 };
 
-export function ModelControls({ aligning, opacity, transform, onAlign, onOpacityChange, onReset, onTransformChange }: ModelControlsProps) {
-  const gestureStart = useRef<{ transform: ModelTransform; distance: number; angle: number } | null>(null);
-  const [sliderWidth, setSliderWidth] = useState(1);
+export function ModelOrbitSurface({ transform, onTransformChange, children, style }: ModelOrbitSurfaceProps) {
+  const transformRef = useRef(transform);
+  const onChangeRef = useRef(onTransformChange);
+  const gestureStart = useRef<{ transform: ModelTransform; distance: number } | null>(null);
+  transformRef.current = transform;
+  onChangeRef.current = onTransformChange;
 
-  const modelPanResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: () => aligning,
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: (event) => {
       const touches = event.nativeEvent.touches;
       gestureStart.current = {
-        transform,
+        transform: transformRef.current,
         distance: touches.length > 1 ? distance(touches[0], touches[1]) : 0,
-        angle: touches.length > 1 ? angle(touches[0], touches[1]) : 0,
       };
     },
     onPanResponderMove: (event, gesture) => {
       const start = gestureStart.current;
       if (!start) return;
       const touches = event.nativeEvent.touches;
-      if (touches.length > 1) {
+      if (touches.length > 1 && start.distance) {
         const nextDistance = distance(touches[0], touches[1]);
-        const nextAngle = angle(touches[0], touches[1]);
-        const scaleFactor = start.distance ? nextDistance / start.distance : 1;
-        onTransformChange({
+        onChangeRef.current({
           ...start.transform,
-          scale: clamp(start.transform.scale * scaleFactor, 0.02, 0.28),
-          rotation: [start.transform.rotation[0], start.transform.rotation[1] + (nextAngle - start.angle), start.transform.rotation[2]],
+          scale: clamp(start.transform.scale * (nextDistance / start.distance), 0.35, 2.5),
         });
         return;
       }
-      onTransformChange({
+      onChangeRef.current({
         ...start.transform,
-        position: [start.transform.position[0] + gesture.dx * 0.006, start.transform.position[1] - gesture.dy * 0.006, start.transform.position[2]],
+        rotation: [
+          clamp(start.transform.rotation[0] + gesture.dy * 0.007, -0.9, 0.9),
+          start.transform.rotation[1] + gesture.dx * 0.012,
+          start.transform.rotation[2],
+        ],
       });
     },
     onPanResponderRelease: () => { gestureStart.current = null; },
     onPanResponderTerminate: () => { gestureStart.current = null; },
-  }), [aligning, onTransformChange, transform]);
+  }), []);
+
+  return <View collapsable={false} testID="model-gesture-area" style={style} {...panResponder.panHandlers}>{children}</View>;
+}
+
+type ModelControlsProps = {
+  opacity: number;
+  onOpacityChange: (value: number) => void;
+  onReset: () => void;
+  onTurn: (direction: -1 | 1) => void;
+};
+
+export function ModelControls({ opacity, onOpacityChange, onReset, onTurn }: ModelControlsProps) {
+  const [sliderWidth, setSliderWidth] = useState(1);
 
   function setOpacityFromTouch(locationX: number) {
     onOpacityChange(clamp(locationX / sliderWidth, 0, 1));
   }
 
   return (
-    <>
-      {aligning ? <View testID="model-gesture-area" style={styles.gestureArea} {...modelPanResponder.panHandlers}><View style={styles.alignHint}><Feather name="move" size={15} color={ui.primary} /><Text style={styles.alignHintText}>Drag to move · pinch to scale · two fingers to rotate</Text></View></View> : null}
-      <View style={styles.controls}>
-        <View style={styles.opacityHeader}><Text style={styles.controlLabel}>PAST</Text><Text style={styles.opacityValue}>{Math.round(opacity * 100)}%</Text><Text style={styles.controlLabel}>NOW</Text></View>
+    <View style={styles.controls}>
+      <View style={styles.turnRow}>
+        <Pressable onPress={() => onTurn(-1)} style={styles.iconButton} accessibilityLabel="Turn left"><Feather name="rotate-ccw" size={14} color={ui.foreground} /></Pressable>
+        <Text style={styles.hint}>Drag to turn the station</Text>
+        <Pressable onPress={() => onTurn(1)} style={styles.iconButton} accessibilityLabel="Turn right"><Feather name="rotate-cw" size={14} color={ui.foreground} /></Pressable>
+        <Pressable onPress={onReset} style={styles.iconButton} accessibilityLabel="Reset view"><Feather name="refresh-cw" size={14} color={ui.primary} /></Pressable>
+      </View>
+      <View style={styles.opacityRow}>
+        <Text style={styles.controlLabel}>PAST</Text>
         <View
           testID="historical-opacity-slider"
           style={styles.sliderTrack}
@@ -71,15 +90,10 @@ export function ModelControls({ aligning, opacity, transform, onAlign, onOpacity
           onResponderMove={(event) => setOpacityFromTouch(event.nativeEvent.locationX)}
         >
           <View style={[styles.sliderFill, { width: `${opacity * 100}%` }]} />
-          <View style={[styles.sliderThumb, { left: `${opacity * 100}%` }]} />
         </View>
-        <View style={styles.actions}>
-          <Pressable onPress={onReset} style={styles.controlButton}><Feather name="rotate-ccw" size={14} color={ui.foreground} /><Text style={styles.controlButtonText}>Reset</Text></Pressable>
-          <Pressable onPress={onAlign} style={[styles.controlButton, aligning && styles.controlButtonActive]}><Feather name="move" size={14} color={aligning ? '#100D1B' : ui.primary} /><Text style={[styles.controlButtonText, aligning && styles.controlButtonTextActive]}>{aligning ? 'Done aligning' : 'Align'}</Text></Pressable>
-        </View>
-        <Text style={styles.disclosure}>{aligning ? 'Prototype AR alignment — move the reconstruction until it matches the building.' : 'Historical reconstruction'}</Text>
+        <Text style={styles.controlLabel}>NOW</Text>
       </View>
-    </>
+    </View>
   );
 }
 
@@ -87,29 +101,17 @@ function distance(first: { pageX: number; pageY: number }, second: { pageX: numb
   return Math.hypot(second.pageX - first.pageX, second.pageY - first.pageY);
 }
 
-function angle(first: { pageX: number; pageY: number }, second: { pageX: number; pageY: number }) {
-  return Math.atan2(second.pageY - first.pageY, second.pageX - first.pageX);
-}
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
 const styles = StyleSheet.create({
-  gestureArea: { ...StyleSheet.absoluteFill, zIndex: 6 },
-  alignHint: { position: 'absolute', top: '27%', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 18, backgroundColor: 'rgba(12,10,27,0.86)', borderWidth: 1, borderColor: '#8E76D4' },
-  alignHintText: { color: ui.foreground, fontSize: 10, fontWeight: '600' },
-  controls: { position: 'absolute', zIndex: 7, left: 18, right: 18, bottom: 170, borderRadius: 18, padding: 13, backgroundColor: 'rgba(17,14,34,0.92)', borderWidth: 1, borderColor: '#514275' },
-  opacityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  controlLabel: { color: '#A49DB8', fontSize: 9, letterSpacing: 1.2, fontWeight: '700' },
-  opacityValue: { color: ui.foreground, fontSize: 11, fontWeight: '700' },
-  sliderTrack: { height: 5, borderRadius: 3, backgroundColor: '#3B3353', marginTop: 10, justifyContent: 'center' },
+  controls: { paddingHorizontal: 10, paddingTop: 6, paddingBottom: 8, backgroundColor: 'rgba(12,10,24,0.72)' },
+  turnRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  hint: { flex: 1, color: '#C9C3D6', fontSize: 10, fontWeight: '600', textAlign: 'center' },
+  iconButton: { width: 32, height: 32, borderRadius: 11, backgroundColor: '#2A2345', borderWidth: 1, borderColor: '#5E4D89', alignItems: 'center', justifyContent: 'center' },
+  opacityRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  controlLabel: { color: '#A49DB8', fontSize: 8, letterSpacing: 1, fontWeight: '700' },
+  sliderTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: '#3B3353', justifyContent: 'center' },
   sliderFill: { height: 5, borderRadius: 3, backgroundColor: ui.primary },
-  sliderThumb: { position: 'absolute', width: 16, height: 16, marginLeft: -8, borderRadius: 8, backgroundColor: '#F5EDFF', borderWidth: 3, borderColor: ui.primary },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 13 },
-  controlButton: { flex: 1, minHeight: 38, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, borderRadius: 12, backgroundColor: '#2A2345', borderWidth: 1, borderColor: '#5E4D89' },
-  controlButtonActive: { backgroundColor: ui.primary, borderColor: ui.primary },
-  controlButtonText: { color: ui.foreground, fontSize: 11, fontWeight: '700' },
-  controlButtonTextActive: { color: '#100D1B' },
-  disclosure: { color: '#A49DB8', fontSize: 9, lineHeight: 13, textAlign: 'center', marginTop: 10 },
 });

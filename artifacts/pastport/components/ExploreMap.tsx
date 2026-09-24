@@ -1,6 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { MapOverlayControls } from '@/components/MapOverlayControls';
 import { ui } from '@/components/PastportUI';
 import type { ExploreMapMarker, ExploreMapProps } from '@/components/exploreMapTypes';
 import type { MapCoordinate } from '@/data/pastport';
@@ -33,6 +34,7 @@ export default function ExploreMap({
   coordinates,
   onOpenSite,
   onLocate,
+  onNavigate,
   markers,
   latitudeDelta = 0.045,
   longitudeDelta = 0.045,
@@ -72,17 +74,13 @@ export default function ExploreMap({
           </View>
         </>
       )}
-      <View style={styles.mapLabel}>
+      <View style={[styles.mapLabel, onNavigate ? styles.mapLabelAboveControl : null]}>
         <Text style={styles.mapLabelText}>{label}</Text>
         <Text style={styles.mapLabelSub}>
           {customMarkers && markers.length === 0 ? 'No places visited here yet' : 'Web preview · native map available on device'}
         </Text>
       </View>
-      {onLocate ? (
-        <Pressable onPress={onLocate} style={styles.mapControl}>
-          <Feather name="crosshair" size={17} color={ui.foreground} />
-        </Pressable>
-      ) : null}
+      <MapOverlayControls onLocate={onLocate} onNavigate={onNavigate} />
     </View>
   );
 }
@@ -96,9 +94,9 @@ const styles = StyleSheet.create({
   roadThree: { width: '100%', top: 55, left: 45, transform: [{ rotate: '-60deg' }] },
   coordinate: { position: 'absolute', top: 18, right: 17, color: '#777696', fontSize: 8, lineHeight: 13, textAlign: 'right', letterSpacing: 0.5 },
   mapLabel: { position: 'absolute', left: 20, bottom: 20 },
+  mapLabelAboveControl: { bottom: 64 },
   mapLabelText: { color: '#C5BFFF', fontSize: 10, fontWeight: '700', letterSpacing: 1.5 },
   mapLabelSub: { color: '#777696', fontSize: 10, marginTop: 4 },
   marker: { position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: '#24214B', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7E6ACF' },
   markerActive: { backgroundColor: ui.primary, borderColor: ui.primary, width: 42, height: 42, borderRadius: 21, shadowColor: ui.primary, shadowOpacity: 0.8, shadowRadius: 12 },
-  mapControl: { position: 'absolute', right: 14, bottom: 14, width: 36, height: 36, borderRadius: 18, backgroundColor: '#24213C', alignItems: 'center', justifyContent: 'center' },
 });

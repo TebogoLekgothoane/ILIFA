@@ -13,6 +13,7 @@ export type ExploreMapProps = {
   coordinates: MapCoordinate;
   onOpenSite?: () => void;
   onLocate?: () => void;
+  onNavigate?: () => void;
   markers?: ExploreMapMarker[];
   latitudeDelta?: number;
   longitudeDelta?: number;

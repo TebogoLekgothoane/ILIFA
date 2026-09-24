@@ -1,0 +1,4 @@
+.env
+dist
+.tsbuildinfo
+env.local
