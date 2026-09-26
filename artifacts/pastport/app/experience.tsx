@@ -16,7 +16,7 @@ import storyStationExperience from '@/assets/images/story-station-experience.jpg
 import storyStationOld from '@/assets/images/story-station-old.jpg';
 import { usePastport } from '@/context/PastportContext';
 import { IconButton, Pill, ui } from '@/components/PastportUI';
-import { AskIlifa } from '@/components/AskIlifa';
+import { AskIlifa, AskIlifaMicButton } from '@/components/AskIlifa';
 import { NarrationPlayer } from '@/components/NarrationPlayer';
 import { StationAmbience } from '@/components/StationAmbience';
 import { DEFAULT_ILIFA_CONTEXT, periodForYear } from '@/lib/ilifa';
@@ -193,11 +193,6 @@ export default function ExperienceScreen() {
     setAskIlifaOpen(true);
   }
 
-  function continueStory() {
-    setAskIlifaOpen(false);
-    setNarrating(true);
-  }
-
   function turnModel(direction: -1 | 1) {
     setModelTransform((current) => ({
       ...current,
@@ -299,13 +294,6 @@ export default function ExperienceScreen() {
 
         <View style={styles.footer}>
           {phase === 'ready' ? <View style={[styles.narration, (!narrating || askIlifaOpen) && styles.narrationHidden]} testID="experience-narration"><NarrationPlayer compact autoPlay={narrating && !askIlifaOpen} /></View> : null}
-          {phase === 'ready' && askIlifaOpen ? (
-            <AskIlifa
-              context={{ ...DEFAULT_ILIFA_CONTEXT, period: periodForYear(year) }}
-              onContinueStory={continueStory}
-              onClose={() => setAskIlifaOpen(false)}
-            />
-          ) : null}
           {phase === 'idle' ? (
             <Pressable testID="show-me-then" onPress={beginScan} style={({ pressed }) => [styles.showButton, pressed && styles.pressed]}>
               <View><Text style={styles.showEyebrow}>THE TIME MACHINE</Text><Text style={styles.showTitle}>SHOW ME THEN</Text></View>
@@ -313,7 +301,7 @@ export default function ExperienceScreen() {
             </Pressable>
           ) : phase === 'ready' && !askIlifaOpen ? (
             <View style={styles.revealedActions}>
-              <Pressable style={styles.askButton} onPress={openAskIlifa} testID="ask-ilifa-open"><Feather name="mic" size={17} color={ui.primary} /><Text style={styles.askText}>Ask Ilifa</Text></Pressable>
+              <AskIlifaMicButton onPress={openAskIlifa} />
               <Pressable style={styles.listenButton} onPress={() => setNarrating((current) => !current)}><Feather name={narrating ? 'pause' : 'play'} size={16} color={ui.foreground} /></Pressable>
             </View>
           ) : phase === 'ready' ? null : phase === 'scanning' ? null : (
@@ -340,6 +328,12 @@ export default function ExperienceScreen() {
         </View>
       </View>
       {selectedStory ? <StoryVideoSheet key={selectedStory.id} story={selectedStory} onClose={() => setSelectedStory(null)} /> : null}
+      {phase === 'ready' && askIlifaOpen ? (
+        <AskIlifa
+          context={{ ...DEFAULT_ILIFA_CONTEXT, period: periodForYear(year) }}
+          onClose={() => setAskIlifaOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -390,10 +384,8 @@ const styles = StyleSheet.create({
   showEyebrow: { color: '#554875', fontSize: 9, fontWeight: '700', letterSpacing: 1.4 },
   showTitle: { color: '#0B0A13', fontSize: 22, fontWeight: '700', letterSpacing: -0.5, marginTop: 4 },
   showArrow: { width: 43, height: 43, borderRadius: 16, backgroundColor: '#D9C8FF', alignItems: 'center', justifyContent: 'center' },
-  revealedActions: { flexDirection: 'row', gap: 9, marginBottom: 14 },
-  askButton: { flex: 1, minHeight: 46, borderRadius: 17, backgroundColor: '#262141', borderWidth: 1, borderColor: '#7564B7', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  askText: { color: ui.foreground, fontWeight: '700', fontSize: 12 },
-  listenButton: { width: 46, minHeight: 46, borderRadius: 17, backgroundColor: '#262141', borderWidth: 1, borderColor: ui.border, alignItems: 'center', justifyContent: 'center' },
+  revealedActions: { flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 14 },
+  listenButton: { width: 46, minHeight: 46, borderRadius: 23, backgroundColor: '#262141', borderWidth: 1, borderColor: ui.border, alignItems: 'center', justifyContent: 'center' },
   scanStatus: { minHeight: 46, borderRadius: 17, backgroundColor: 'rgba(22,18,40,0.9)', borderWidth: 1, borderColor: '#68549A', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   scanStatusText: { color: ui.primary, fontSize: 12, fontWeight: '700', letterSpacing: 0.4 },
   timeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 },

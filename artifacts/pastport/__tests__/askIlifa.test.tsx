@@ -4,34 +4,40 @@ import { AskIlifa } from '@/components/AskIlifa';
 import { DEFAULT_ILIFA_CONTEXT } from '@/lib/ilifa';
 
 const mockRequestPermission = jest.fn();
-const mockPrepare = jest.fn();
-const mockRecord = jest.fn();
-const mockStop = jest.fn();
-const mockGenerate = jest.fn();
-const mockRead = jest.fn();
-const mockWrite = jest.fn();
+const mockStreamStart = jest.fn();
+const mockStreamStop = jest.fn();
+const mockFetchToken = jest.fn();
+const mockCreateSession = jest.fn();
+const mockSendText = jest.fn();
+const mockSendAudioStreamEnd = jest.fn();
+const mockSessionStop = jest.fn();
 const mockPlay = jest.fn();
 const mockPause = jest.fn();
 const mockRemove = jest.fn();
+const mockWrite = jest.fn();
 
 jest.mock('expo-audio', () => ({
-  RecordingPresets: { HIGH_QUALITY: { extension: '.m4a' } },
   requestRecordingPermissionsAsync: () => mockRequestPermission(),
   setAudioModeAsync: jest.fn(),
-  useAudioRecorder: () => ({
-    prepareToRecordAsync: mockPrepare,
-    record: mockRecord,
-    stop: mockStop,
-    uri: 'file://recording.m4a',
+  useAudioStream: () => ({
+    stream: {
+      start: (...args: unknown[]) => mockStreamStart(...args),
+      stop: (...args: unknown[]) => mockStreamStop(...args),
+    },
+    isStreaming: false,
   }),
-  useAudioRecorderState: () => ({ durationMillis: 1800, isRecording: true }),
-  createAudioPlayer: () => ({ play: mockPlay, pause: mockPause, remove: mockRemove }),
+  createAudioPlayer: () => ({
+    play: mockPlay,
+    pause: mockPause,
+    remove: mockRemove,
+    addListener: () => ({ remove: jest.fn() }),
+    removeListener: jest.fn(),
+  }),
 }));
 
 jest.mock('expo-file-system/legacy', () => ({
   EncodingType: { Base64: 'base64' },
   cacheDirectory: 'file://cache/',
-  readAsStringAsync: (...args: unknown[]) => mockRead(...args),
   writeAsStringAsync: (...args: unknown[]) => mockWrite(...args),
 }));
 
@@ -39,9 +45,13 @@ jest.mock('@/lib/ilifa', () => {
   const actual = jest.requireActual('@/lib/ilifa');
   return {
     ...actual,
-    generateIlifaResponse: (...args: unknown[]) => mockGenerate(...args),
+    fetchIlifaLiveToken: (...args: unknown[]) => mockFetchToken(...args),
   };
 });
+
+jest.mock('@/lib/ilifaLiveSession', () => ({
+  createIlifaLiveSession: (...args: unknown[]) => mockCreateSession(...args),
+}));
 
 jest.mock('@expo/vector-icons', () => ({
   Feather: () => null,
@@ -50,57 +60,94 @@ jest.mock('@expo/vector-icons', () => ({
 describe('AskIlifa', () => {
   beforeEach(() => {
     mockRequestPermission.mockReset();
-    mockPrepare.mockReset();
-    mockRecord.mockReset();
-    mockStop.mockReset();
-    mockGenerate.mockReset();
-    mockRead.mockReset();
-    mockWrite.mockReset();
+    mockStreamStart.mockReset();
+    mockStreamStop.mockReset();
+    mockFetchToken.mockReset();
+    mockCreateSession.mockReset();
+    mockSendText.mockReset();
+    mockSendAudioStreamEnd.mockReset();
+    mockSessionStop.mockReset();
     mockPlay.mockReset();
     mockPause.mockReset();
     mockRemove.mockReset();
+    mockWrite.mockReset();
+
     mockRequestPermission.mockResolvedValue({ granted: true, canAskAgain: true });
-    mockPrepare.mockResolvedValue(undefined);
-    mockStop.mockResolvedValue(undefined);
-    mockRead.mockResolvedValue('dGVzdA==');
-    mockGenerate.mockResolvedValue({
-      answer: 'The station connected East London to a wider railway network.',
-      question: 'Why was this station important?',
-      audioBase64: null,
-      sourceTopics: ['railway history'],
+    mockStreamStart.mockResolvedValue(undefined);
+    mockFetchToken.mockResolvedValue({
+      token: 'auth_tokens/test-token',
+      model: 'gemini-3.8-live',
+      wsUrl:
+        'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained',
+      expireTime: new Date(Date.now() + 30 * 60_000).toISOString(),
+    });
+    mockCreateSession.mockImplementation((_token, callbacks) => {
+      queueMicrotask(() => {
+        callbacks?.onReady?.();
+        callbacks?.onPhase?.('listening');
+      });
+      return {
+        sendPcmBase64: jest.fn(),
+        sendAudioStreamEnd: mockSendAudioStreamEnd,
+        sendText: (...args: unknown[]) => {
+          mockSendText(...args);
+          callbacks?.onTranscript?.({ role: 'user', text: String(args[0] ?? '') });
+          callbacks?.onTranscript?.({
+            role: 'model',
+            text: 'The station connected East London to a wider railway network.',
+          });
+          callbacks?.onTurnComplete?.();
+          callbacks?.onPhase?.('listening');
+        },
+        stop: mockSessionStop,
+        isOpen: () => true,
+      };
     });
   });
 
-  it('asks for the microphone and shows the listening state', async () => {
-    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onContinueStory={jest.fn()} />);
+  it('opens a closable voice modal and shows the listening state', async () => {
+    const onClose = jest.fn();
+    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onClose={onClose} />);
 
     await waitFor(() => {
       expect(screen.getByText('Listening...')).toBeTruthy();
     });
+    expect(screen.getByTestId('ask-ilifa-mic-listening')).toBeTruthy();
+    expect(screen.getByTestId('ask-ilifa-close')).toBeTruthy();
+    expect(screen.queryByText('Continue story')).toBeNull();
     expect(mockRequestPermission).toHaveBeenCalled();
-    expect(mockRecord).toHaveBeenCalled();
+    expect(mockFetchToken).toHaveBeenCalled();
+    expect(mockStreamStart).toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('ask-ilifa-close'));
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalled();
+    });
   });
 
   it('explains how to enable the microphone when permission is denied', async () => {
     mockRequestPermission.mockResolvedValue({ granted: false, canAskAgain: false });
-    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onContinueStory={jest.fn()} />);
+    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onClose={jest.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('ask-ilifa-permission')).toBeTruthy();
     });
     expect(screen.getByText('Open microphone settings')).toBeTruthy();
+    expect(screen.queryByText('Continue story')).toBeNull();
   });
 
-  it('sends a typed question and can continue the story', async () => {
-    const onContinueStory = jest.fn();
-    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onContinueStory={onContinueStory} />);
+  it('keeps listening after a reply so the user can ask again', async () => {
+    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onClose={jest.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('ask-ilifa-type')).toBeTruthy();
     });
 
     fireEvent.press(screen.getByTestId('ask-ilifa-type'));
-    fireEvent.changeText(screen.getByPlaceholderText('Type a question about this place'), 'Why was this station important?');
+    fireEvent.changeText(
+      screen.getByPlaceholderText('Type a question about this place'),
+      'Why was this station important?',
+    );
 
     await act(async () => {
       fireEvent.press(screen.getByTestId('ask-ilifa-send-text'));
@@ -109,35 +156,30 @@ describe('AskIlifa', () => {
     await waitFor(() => {
       expect(screen.getByTestId('ask-ilifa-answer').props.children).toContain('connected East London');
     });
-    expect(mockGenerate).toHaveBeenCalled();
-    const payload = mockGenerate.mock.calls[0][0] as { question: string; site: string };
-    expect(payload.question).toBe('Why was this station important?');
-    expect(payload.site).toBe('east_london_railway_station');
-    expect(JSON.stringify(payload)).not.toContain('AIza');
-    expect(JSON.stringify(payload)).not.toContain('GEMINI');
+    expect(mockSendText).toHaveBeenCalledWith('Why was this station important?');
+    expect(screen.getByText('Listening...')).toBeTruthy();
+    expect(screen.queryByTestId('ask-ilifa-continue')).toBeNull();
 
-    fireEvent.press(screen.getByTestId('ask-ilifa-continue'));
-    expect(onContinueStory).toHaveBeenCalled();
-  });
-
-  it('shows a retry state instead of staying on thinking', async () => {
-    mockGenerate.mockRejectedValue(new Error('network down'));
-    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onContinueStory={jest.fn()} />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('ask-ilifa-type')).toBeTruthy();
-    });
     fireEvent.press(screen.getByTestId('ask-ilifa-type'));
-    fireEvent.changeText(screen.getByPlaceholderText('Type a question about this place'), 'What did it look like?');
-
+    fireEvent.changeText(
+      screen.getByPlaceholderText('Type a question about this place'),
+      'Who used this station?',
+    );
     await act(async () => {
       fireEvent.press(screen.getByTestId('ask-ilifa-send-text'));
     });
+    expect(mockSendText).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a retry state when the live token cannot be minted', async () => {
+    mockFetchToken.mockRejectedValue(new Error('network down'));
+    const screen = render(<AskIlifa context={DEFAULT_ILIFA_CONTEXT} onClose={jest.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId('ask-ilifa-error')).toBeTruthy();
     });
     expect(screen.getByTestId('ask-ilifa-retry')).toBeTruthy();
-    expect(screen.queryByTestId('ask-ilifa-thinking')).toBeNull();
+    expect(screen.queryByTestId('ask-ilifa-connecting')).toBeNull();
+    expect(screen.queryByText('Continue story')).toBeNull();
   });
 });

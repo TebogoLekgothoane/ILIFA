@@ -2,62 +2,213 @@ import { Feather } from '@expo/vector-icons';
 import {
   createAudioPlayer,
   type AudioPlayer,
-  RecordingPresets,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
-  useAudioRecorder,
-  useAudioRecorderState,
+  useAudioStream,
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Linking,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { ui } from '@/components/PastportUI';
 import {
-  generateIlifaResponse,
+  fetchIlifaLiveToken,
   IlifaClientError,
-  type IlifaAskRequest,
-  type IlifaAskResponse,
   type IlifaGuideContext,
-  type IlifaHistoryTurn,
   type IlifaLanguage,
 } from '@/lib/ilifa';
+import {
+  createIlifaLiveSession,
+  type IlifaLiveSession,
+  type LiveSessionPhase,
+} from '@/lib/ilifaLiveSession';
+import {
+  float32ToInt16Pcm,
+  int16BufferToBase64,
+  pcmBase64DurationMs,
+  pcmChunksToWavBase64,
+  resampleInt16Pcm,
+} from '@/lib/pcm';
 
-type AskPhase = 'listening' | 'thinking' | 'speaking' | 'error' | 'permission';
+type VoiceState = LiveSessionPhase | 'permission' | 'processing';
 
 type AskIlifaProps = {
   context: IlifaGuideContext;
-  onContinueStory: () => void;
-  onClose?: () => void;
+  onClose: () => void;
 };
 
-export function AskIlifa({ context, onContinueStory, onClose }: AskIlifaProps) {
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder);
-  const [phase, setPhase] = useState<AskPhase>('listening');
+const TARGET_INPUT_RATE = 16000;
+const OUTPUT_RATE = 24000;
+const MIN_PLAY_CHUNK_MS = 480;
+const SPEECH_RMS = 350;
+const BARGE_IN_RMS = 1800;
+const SILENCE_END_MS = 700;
+const LISTEN_ARM_MS = 450;
+
+export function AskIlifa({ context, onClose }: AskIlifaProps) {
+  const sessionRef = useRef<IlifaLiveSession | null>(null);
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const playQueueRef = useRef<Array<{ wav: string; durationMs: number }>>([]);
+  const pcmChunksRef = useRef<string[]>([]);
+  const pcmRateRef = useRef(OUTPUT_RATE);
+  const pcmPendingMsRef = useRef(0);
+  const playingRef = useRef(false);
+  const playbackIdRef = useRef(0);
+  const speakingRef = useRef(false);
+  const speechActiveRef = useRef(false);
+  const endedTurnRef = useRef(false);
+  const closedByUserRef = useRef(false);
+  const readyAtRef = useRef(0);
+  const listenReadyAtRef = useRef(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const languageRef = useRef<IlifaLanguage>('auto');
+  const generationRef = useRef(0);
+
+  const [phase, setPhase] = useState<VoiceState>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [typedQuestion, setTypedQuestion] = useState('');
   const [showTyped, setShowTyped] = useState(false);
-  const [reply, setReply] = useState<IlifaAskResponse | null>(null);
-  const [speaking, setSpeaking] = useState(false);
+  const [userTranscript, setUserTranscript] = useState('');
+  const [modelTranscript, setModelTranscript] = useState('');
   const [language, setLanguage] = useState<IlifaLanguage>('auto');
   const [canAskAgain, setCanAskAgain] = useState(true);
-  const historyRef = useRef<IlifaHistoryTurn[]>([]);
-  const lastRequestRef = useRef<IlifaAskRequest | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const playerRef = useRef<AudioPlayer | null>(null);
-  const thinkingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  languageRef.current = language;
+
+  const { stream } = useAudioStream({
+    sampleRate: TARGET_INPUT_RATE,
+    channels: 1,
+    encoding: 'int16',
+    onBuffer: (buffer) => {
+      const session = sessionRef.current;
+      if (!session?.isOpen()) return;
+
+      let samples: Int16Array;
+      try {
+        samples = new Int16Array(buffer.data);
+      } catch {
+        samples = float32ToInt16Pcm(buffer.data);
+      }
+
+      const rate = buffer.sampleRate || TARGET_INPUT_RATE;
+      if (rate !== TARGET_INPUT_RATE) {
+        samples = resampleInt16Pcm(samples, rate, TARGET_INPUT_RATE);
+      }
+
+      const rms = rootMeanSquare(samples);
+      if (playingRef.current) {
+        if (rms >= BARGE_IN_RMS) interruptForUser();
+        return;
+      }
+      if (Date.now() < listenReadyAtRef.current) return;
+
+      watchUserSpeech(rms, session);
+      session.sendPcmBase64(int16BufferToBase64(samples), TARGET_INPUT_RATE);
+    },
+  });
+
+  const languageBootstrapped = useRef(false);
 
   useEffect(() => {
-    void beginListening();
+    void startLiveSession();
     return () => {
-      abortRef.current?.abort();
-      if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
-      void stopReplyAudio();
-      void recorder.stop().catch(() => undefined);
+      void teardown();
     };
   }, []);
 
+  useEffect(() => {
+    if (!languageBootstrapped.current) {
+      languageBootstrapped.current = true;
+      return;
+    }
+    void startLiveSession();
+  }, [language]);
+
+  async function teardown() {
+    closedByUserRef.current = true;
+    generationRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    clearSilenceTimer();
+    try {
+      stream?.stop?.();
+    } catch {
+      // Stream may already be stopped.
+    }
+    sessionRef.current?.stop();
+    sessionRef.current = null;
+    playQueueRef.current = [];
+    pcmChunksRef.current = [];
+    pcmPendingMsRef.current = 0;
+    speakingRef.current = false;
+    speechActiveRef.current = false;
+    await stopReplyAudio();
+  }
+
+  function clearSilenceTimer() {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  }
+
+  function watchUserSpeech(rms: number, session: IlifaLiveSession) {
+    if (rms >= SPEECH_RMS) {
+      speechActiveRef.current = true;
+      endedTurnRef.current = false;
+      clearSilenceTimer();
+      return;
+    }
+    if (!speechActiveRef.current || endedTurnRef.current) return;
+    if (silenceTimerRef.current) return;
+    silenceTimerRef.current = setTimeout(() => {
+      silenceTimerRef.current = null;
+      if (!speechActiveRef.current || playingRef.current || endedTurnRef.current) return;
+      endedTurnRef.current = true;
+      speechActiveRef.current = false;
+      setPhase('processing');
+      session.sendAudioStreamEnd();
+    }, SILENCE_END_MS);
+  }
+
+  function interruptForUser() {
+    playbackIdRef.current += 1;
+    playQueueRef.current = [];
+    pcmChunksRef.current = [];
+    pcmPendingMsRef.current = 0;
+    speakingRef.current = false;
+    endedTurnRef.current = false;
+    speechActiveRef.current = true;
+    clearSilenceTimer();
+    void stopReplyAudio();
+    listenReadyAtRef.current = Date.now() + 200;
+    setPhase('listening');
+    void restartMic();
+  }
+
+  function returnToListening() {
+    speakingRef.current = false;
+    playingRef.current = false;
+    endedTurnRef.current = false;
+    speechActiveRef.current = false;
+    listenReadyAtRef.current = Date.now() + LISTEN_ARM_MS;
+    clearSilenceTimer();
+    setPhase('listening');
+    void restartMic();
+  }
+
   async function stopReplyAudio() {
+    playingRef.current = false;
     const player = playerRef.current;
     playerRef.current = null;
     if (!player) return;
@@ -67,17 +218,38 @@ export function AskIlifa({ context, onContinueStory, onClose }: AskIlifaProps) {
     } catch {
       // Playback cleanup should never block the guide.
     }
-    setSpeaking(false);
   }
 
-  async function beginListening() {
+  async function startLiveSession() {
+    const generation = ++generationRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    closedByUserRef.current = false;
     setError(null);
-    setReply(null);
     setShowTyped(false);
+    setPhase('connecting');
+    playQueueRef.current = [];
+    pcmChunksRef.current = [];
+    pcmPendingMsRef.current = 0;
+    speakingRef.current = false;
+    speechActiveRef.current = false;
+    endedTurnRef.current = false;
+    clearSilenceTimer();
     await stopReplyAudio();
+    sessionRef.current?.stop();
+    sessionRef.current = null;
+
+    try {
+      stream?.stop?.();
+    } catch {
+      // Ignore.
+    }
 
     try {
       const permission = await requestRecordingPermissionsAsync();
+      if (generation !== generationRef.current) return;
       setCanAskAgain(permission.canAskAgain !== false);
       if (!permission.granted) {
         setPhase('permission');
@@ -89,287 +261,417 @@ export function AskIlifa({ context, onContinueStory, onClose }: AskIlifaProps) {
         allowsRecording: true,
         interruptionMode: 'mixWithOthers',
       });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
-      setPhase('listening');
+
+      const token = await fetchIlifaLiveToken(
+        { ...context, language: languageRef.current },
+        { signal: controller.signal },
+      );
+      if (generation !== generationRef.current) return;
+
+      const session = createIlifaLiveSession(token, {
+        onPhase: (next) => {
+          if (generation !== generationRef.current) return;
+          if (next === 'speaking') {
+            speakingRef.current = true;
+            speechActiveRef.current = false;
+            endedTurnRef.current = false;
+            clearSilenceTimer();
+            setPhase('speaking');
+            return;
+          }
+          if (next === 'listening' && !playingRef.current) {
+            returnToListening();
+          }
+        },
+        onTranscript: (transcript) => {
+          if (generation !== generationRef.current) return;
+          if (transcript.role === 'user') setUserTranscript(transcript.text);
+          else setModelTranscript(transcript.text);
+        },
+        onAudio: (pcmBase64, sampleRate) => {
+          if (generation !== generationRef.current) return;
+          speakingRef.current = true;
+          setPhase('speaking');
+          enqueueModelPcm(pcmBase64, sampleRate);
+        },
+        onTurnComplete: () => {
+          if (generation !== generationRef.current) return;
+          flushModelPcm();
+          if (!playingRef.current && playQueueRef.current.length === 0) {
+            returnToListening();
+          }
+        },
+        onInterrupted: () => {
+          if (generation !== generationRef.current) return;
+          interruptForUser();
+        },
+        onError: (message) => {
+          if (generation !== generationRef.current) return;
+          setError(message);
+          setPhase('error');
+        },
+        onDisconnected: () => {
+          if (generation !== generationRef.current || closedByUserRef.current) return;
+          if (Date.now() - readyAtRef.current < 2000) {
+            setError('The live guide disconnected. Please try again.');
+            setPhase('error');
+            return;
+          }
+          void startLiveSession();
+        },
+        onReady: () => {
+          if (generation !== generationRef.current) return;
+          readyAtRef.current = Date.now();
+          returnToListening();
+        },
+      });
+
+      sessionRef.current = session;
+    } catch (caught) {
+      if (generation !== generationRef.current) return;
+      if (controller.signal.aborted) return;
+      const message =
+        caught instanceof IlifaClientError
+          ? caught.message
+          : 'Ilifa could not start a live session. Please try again.';
+      setError(message);
+      setPhase('error');
+    }
+  }
+
+  function enqueueModelPcm(pcmBase64: string, sampleRate: number) {
+    pcmRateRef.current = sampleRate || OUTPUT_RATE;
+    pcmChunksRef.current.push(pcmBase64);
+    pcmPendingMsRef.current += pcmBase64DurationMs(pcmBase64, pcmRateRef.current);
+    if (pcmPendingMsRef.current >= MIN_PLAY_CHUNK_MS) flushModelPcm();
+  }
+
+  function flushModelPcm() {
+    if (pcmChunksRef.current.length === 0) return;
+    const rate = pcmRateRef.current;
+    const durationMs = pcmPendingMsRef.current;
+    const wav = pcmChunksToWavBase64(pcmChunksRef.current, rate);
+    pcmChunksRef.current = [];
+    pcmPendingMsRef.current = 0;
+    if (!wav) return;
+    playQueueRef.current.push({ wav, durationMs });
+    void drainPlaybackQueue();
+  }
+
+  async function restartMic() {
+    if (!stream || typeof stream.start !== 'function') return;
+    try {
+      stream.stop();
+    } catch {
+      // Already stopped after playback interrupted capture.
+    }
+    try {
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: true,
+        interruptionMode: 'mixWithOthers',
+      });
+      await stream.start();
     } catch {
       setError('The microphone could not be started. Check your device settings and try again.');
       setPhase('error');
     }
   }
 
-  async function stopListeningAndAsk() {
-    try {
-      await recorder.stop();
-    } catch {
-      setError('The recording could not be saved. Please try again.');
-      setPhase('error');
-      return;
-    }
+  async function drainPlaybackQueue() {
+    if (playingRef.current) return;
+    const playbackId = ++playbackIdRef.current;
+    playingRef.current = true;
+    speakingRef.current = true;
+    setPhase('speaking');
 
-    const uri = recorder.uri;
-    const duration = recorderState.durationMillis ?? 0;
-    if (!uri || duration < 400) {
-      setError('That recording was too short. Ask again when you are ready.');
-      setPhase('error');
-      return;
-    }
-
-    try {
-      const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-      if (!audioBase64) {
-        setError('That recording was empty. Please ask again.');
-        setPhase('error');
-        return;
+    while (playQueueRef.current.length > 0) {
+      if (playbackId !== playbackIdRef.current) return;
+      const chunk = playQueueRef.current.shift();
+      if (!chunk) break;
+      try {
+        await playWavChunk(chunk.wav, chunk.durationMs);
+      } catch {
+        // Skip a bad chunk and continue the queue.
       }
-      await askIlifa({
-        ...context,
-        language,
-        audioBase64,
-        audioMimeType: 'audio/m4a',
-        history: historyRef.current,
-      });
-    } catch {
-      setError('Ilifa could not read the recording. Please try again.');
-      setPhase('error');
     }
+
+    if (playbackId !== playbackIdRef.current) return;
+    playingRef.current = false;
+    returnToListening();
   }
 
-  async function askTyped() {
+  async function playWavChunk(wavBase64: string, durationMs: number) {
+    const directory = FileSystem.cacheDirectory;
+    if (!directory) return;
+
+    const path = `${directory}ilifa-live-${Date.now()}.wav`;
+    await FileSystem.writeAsStringAsync(path, wavBase64, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+
+      try {
+        const previous = playerRef.current;
+        playerRef.current = null;
+        if (previous) {
+          try {
+            previous.pause();
+            previous.remove();
+          } catch {
+            // Ignore.
+          }
+        }
+
+        const player = createAudioPlayer({ uri: path });
+        playerRef.current = player;
+        let subscription: { remove: () => void } | null = null;
+        const onStatus = (status: { didJustFinish?: boolean }) => {
+          if (status.didJustFinish) {
+            try {
+              subscription?.remove();
+            } catch {
+              // Ignore.
+            }
+            finish();
+          }
+        };
+        try {
+          subscription = player.addListener('playbackStatusUpdate', onStatus);
+        } catch {
+          setTimeout(finish, 800);
+        }
+        player.play();
+        setTimeout(finish, Math.min(12_000, Math.max(600, durationMs + 350)));
+      } catch {
+        finish();
+      }
+    });
+  }
+
+  function sendTyped() {
     const question = typedQuestion.trim();
     if (!question) {
       setError('Type a question about this place, then send it.');
       setPhase('error');
       return;
     }
-    await recorder.stop().catch(() => undefined);
-    await askIlifa({
-      ...context,
-      language,
-      question,
-      history: historyRef.current,
-    });
-  }
-
-  async function askIlifa(request: IlifaAskRequest) {
-    lastRequestRef.current = request;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setPhase('thinking');
-    setError(null);
-    setReply(null);
-
-    if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
-    thinkingTimerRef.current = setTimeout(() => {
-      controller.abort();
-    }, 70_000);
-
-    try {
-      const response = await generateIlifaResponse(request, { signal: controller.signal, timeoutMs: 70_000 });
-      if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
-      historyRef.current = [...historyRef.current, { question: response.question || request.question || '', answer: response.answer }].slice(-4);
-      setReply(response);
-      setPhase('speaking');
-      await playReply(response);
-    } catch (caught) {
-      if (thinkingTimerRef.current) clearTimeout(thinkingTimerRef.current);
-      const message = caught instanceof IlifaClientError
-        ? caught.message
-        : 'Ilifa could not answer just now. Please try again.';
-      setError(message);
+    const session = sessionRef.current;
+    if (!session?.isOpen()) {
+      setError('Ilifa is not connected yet. Please wait a moment.');
       setPhase('error');
-    }
-  }
-
-  async function playReply(response: IlifaAskResponse) {
-    await stopReplyAudio();
-    await setAudioModeAsync({
-      playsInSilentMode: true,
-      allowsRecording: false,
-      interruptionMode: 'mixWithOthers',
-    });
-
-    const uri = await resolveReplyUri(response);
-    if (!uri) {
-      setSpeaking(false);
       return;
     }
-
-    try {
-      const player = createAudioPlayer({ uri });
-      playerRef.current = player;
-      player.play();
-      setSpeaking(true);
-    } catch {
-      setSpeaking(false);
-      setError('The answer is ready, but the spoken reply could not be played.');
-    }
-  }
-
-  async function toggleReplyPlayback() {
-    const player = playerRef.current;
-    if (!player) {
-      if (reply) await playReply(reply);
-      return;
-    }
-    if (speaking) {
-      player.pause();
-      setSpeaking(false);
-      return;
-    }
-    player.play();
-    setSpeaking(true);
-  }
-
-  async function retry() {
-    if (lastRequestRef.current) {
-      await askIlifa(lastRequestRef.current);
-      return;
-    }
-    await beginListening();
+    setUserTranscript(question);
+    setPhase('processing');
+    session.sendText(question);
+    session.sendAudioStreamEnd();
+    setTypedQuestion('');
+    setShowTyped(false);
   }
 
   async function openMicrophoneSettings() {
     await Linking.openSettings();
   }
 
-  return (
-    <View style={styles.card} testID="ask-ilifa">
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>{phase === 'listening' ? 'ASK ILIFA' : 'ILIFA'}</Text>
-        {onClose ? (
-          <Pressable onPress={onClose} hitSlop={10} testID="ask-ilifa-close">
-            <Feather name="x" size={16} color={ui.mutedForeground} />
-          </Pressable>
-        ) : null}
-      </View>
+  async function handleClose() {
+    await teardown();
+    onClose();
+  }
 
-      {phase === 'listening' ? (
-        <>
-          <View style={styles.langRow}>
-            <LanguageChip label="Auto" active={language === 'auto'} onPress={() => setLanguage('auto')} />
-            <LanguageChip label="English" active={language === 'en'} onPress={() => setLanguage('en')} />
-            <LanguageChip label="isiXhosa" active={language === 'xh'} onPress={() => setLanguage('xh')} />
+  const status = statusCopy(phase, language);
+
+  return (
+    <Modal animationType="fade" transparent visible onRequestClose={() => void handleClose()}>
+      <View style={styles.overlay} testID="ask-ilifa">
+        <View style={styles.sheet}>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>ASK ILIFA</Text>
+            <Pressable onPress={() => void handleClose()} hitSlop={12} testID="ask-ilifa-close">
+              <Feather name="x" size={18} color={ui.mutedForeground} />
+            </Pressable>
           </View>
-          <View style={styles.statusRow}>
-            <View style={styles.mic}><Feather name="mic" size={18} color="#0B0A13" /></View>
-            <View style={styles.copy}>
-              <Text style={styles.title}>{language === 'xh' ? 'Uyamamela...' : 'Listening...'}</Text>
-              <Text style={styles.subtitle}>{language === 'xh' ? 'Thetha ngokukhululekileyo.' : 'Speak naturally.'}</Text>
+
+          {phase === 'connecting' ? (
+            <View style={styles.center} testID="ask-ilifa-connecting">
+              <ActivityIndicator color={ui.primary} />
+              <Text style={styles.title}>Connecting...</Text>
+              <Text style={styles.subtitle}>Opening a live voice session with Ilifa...</Text>
             </View>
-          </View>
-          <Text style={styles.quote}>{language === 'xh' ? '“Kutheni le sitiishoni ibalulekile?”' : '“Why was this station important?”'}</Text>
-          {showTyped ? (
-            <View style={styles.typedRow}>
-              <TextInput
-                value={typedQuestion}
-                onChangeText={setTypedQuestion}
-                placeholder="Type a question about this place"
-                placeholderTextColor={ui.mutedForeground}
-                style={styles.input}
-                returnKeyType="send"
-                onSubmitEditing={() => void askTyped()}
-              />
-              <Pressable onPress={() => void askTyped()} style={styles.send} testID="ask-ilifa-send-text">
-                <Feather name="arrow-up" size={16} color="#0B0A13" />
+          ) : null}
+
+          {phase === 'listening' || phase === 'processing' || phase === 'speaking' ? (
+            <>
+              <View style={styles.langRow}>
+                <LanguageChip label="Auto" active={language === 'auto'} onPress={() => setLanguage('auto')} />
+                <LanguageChip label="English" active={language === 'en'} onPress={() => setLanguage('en')} />
+                <LanguageChip label="isiXhosa" active={language === 'xh'} onPress={() => setLanguage('xh')} />
+              </View>
+              <View style={styles.voiceBlock}>
+                <VoiceStateMic state={phase} />
+                <Text style={styles.title} testID="ask-ilifa-state">
+                  {status.title}
+                </Text>
+                <Text style={styles.subtitle}>{status.subtitle}</Text>
+              </View>
+              {userTranscript ? (
+                <Text style={styles.quote} testID="ask-ilifa-user-transcript">
+                  “{userTranscript}”
+                </Text>
+              ) : (
+                <Text style={styles.quote}>
+                  {language === 'xh' ? '“Kutheni le sitiishoni ibalulekile?”' : '“Why was this station important?”'}
+                </Text>
+              )}
+              {modelTranscript ? (
+                <Text style={styles.answer} testID="ask-ilifa-answer">
+                  {modelTranscript}
+                </Text>
+              ) : null}
+              {showTyped ? (
+                <View style={styles.typedRow}>
+                  <TextInput
+                    value={typedQuestion}
+                    onChangeText={setTypedQuestion}
+                    placeholder="Type a question about this place"
+                    placeholderTextColor={ui.mutedForeground}
+                    style={styles.input}
+                    returnKeyType="send"
+                    onSubmitEditing={sendTyped}
+                  />
+                  <Pressable onPress={sendTyped} style={styles.send} testID="ask-ilifa-send-text">
+                    <Feather name="arrow-up" size={16} color="#0B0A13" />
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => setShowTyped(true)} testID="ask-ilifa-type">
+                  <Text style={styles.typeInstead}>Type instead</Text>
+                </Pressable>
+              )}
+            </>
+          ) : null}
+
+          {phase === 'permission' ? (
+            <View testID="ask-ilifa-permission">
+              <Text style={styles.title}>Microphone access is needed</Text>
+              <Text style={styles.subtitle}>
+                {canAskAgain
+                  ? 'Ilifa listens on this device so you can ask about the station by voice. Enable the microphone to continue.'
+                  : 'Microphone access is turned off. Open settings, enable the microphone for this app, then return here.'}
+              </Text>
+              <Pressable
+                onPress={() => void (canAskAgain ? startLiveSession() : openMicrophoneSettings())}
+                style={styles.primary}
+              >
+                <Text style={styles.primaryText}>{canAskAgain ? 'Enable microphone' : 'Open microphone settings'}</Text>
               </Pressable>
             </View>
-          ) : (
-            <Pressable onPress={() => setShowTyped(true)} testID="ask-ilifa-type">
-              <Text style={styles.typeInstead}>Type instead</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={() => void stopListeningAndAsk()} style={styles.primary} testID="ask-ilifa-stop">
-            <Text style={styles.primaryText}>Stop</Text>
-          </Pressable>
-        </>
-      ) : null}
-
-      {phase === 'thinking' ? (
-        <View style={styles.center} testID="ask-ilifa-thinking">
-          <ActivityIndicator color={ui.primary} />
-          <Text style={styles.title}>Thinking...</Text>
-          <Text style={styles.subtitle}>Understanding your question about East London Railway Station...</Text>
-        </View>
-      ) : null}
-
-      {phase === 'speaking' && reply ? (
-        <>
-          <View style={styles.statusRow}>
-            <View style={[styles.mic, styles.speak]}><Feather name="volume-2" size={18} color="#0B0A13" /></View>
-            <View style={styles.copy}>
-              <Text style={styles.title}>{speaking ? 'Speaking' : 'Paused'}</Text>
-              <Text style={styles.subtitle}>{reply.question || 'Your question'}</Text>
-            </View>
-          </View>
-          <Text style={styles.answer} testID="ask-ilifa-answer">{reply.answer}</Text>
-          {!reply.audioBase64 && !reply.audioUrl ? (
-            <Text style={styles.noAudio}>Text answer ready. Spoken audio was unavailable this time.</Text>
           ) : null}
-          <View style={styles.actions}>
-            <Pressable onPress={() => void toggleReplyPlayback()} style={styles.secondary} testID="ask-ilifa-pause">
-              <Feather name={speaking ? 'pause' : 'play'} size={14} color={ui.foreground} />
-              <Text style={styles.secondaryText}>{speaking ? 'Pause' : 'Play'}</Text>
-            </Pressable>
-            <Pressable onPress={() => void beginListening()} style={styles.secondary} testID="ask-ilifa-another">
-              <Text style={styles.secondaryText}>Ask another question</Text>
-            </Pressable>
+
+          {phase === 'error' ? (
+            <View testID="ask-ilifa-error">
+              <Text style={styles.title}>Something went wrong</Text>
+              <Text style={styles.subtitle}>{error}</Text>
+              <Pressable onPress={() => void startLiveSession()} style={styles.primary} testID="ask-ilifa-retry">
+                <Text style={styles.primaryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+export function AskIlifaMicButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      testID="ask-ilifa-open"
+      accessibilityLabel="Ask Ilifa"
+      style={styles.launchButton}
+    >
+      <PulseRing color={ui.primary} />
+      <View style={styles.launchCore}>
+        <Feather name="mic" size={18} color="#0B0A13" />
+      </View>
+    </Pressable>
+  );
+}
+
+function VoiceStateMic({ state }: { state: 'listening' | 'processing' | 'speaking' }) {
+  const color = state === 'speaking' ? ui.accent : state === 'processing' ? '#C7B8F2' : ui.primary;
+  const icon = state === 'speaking' ? 'volume-2' : 'mic';
+  return (
+    <View style={styles.voiceMic} testID={`ask-ilifa-mic-${state}`}>
+      {state === 'processing' ? (
+        <ActivityIndicator color={color} />
+      ) : (
+        <>
+          <PulseRing color={color} />
+          <View style={[styles.voiceCore, { backgroundColor: color }]}>
+            <Feather name={icon} size={22} color="#0B0A13" />
           </View>
-          <Pressable onPress={onContinueStory} style={styles.primary} testID="ask-ilifa-continue">
-            <Text style={styles.primaryText}>Continue story</Text>
-          </Pressable>
         </>
-      ) : null}
-
-      {phase === 'permission' ? (
-        <View testID="ask-ilifa-permission">
-          <Text style={styles.title}>Microphone access is needed</Text>
-          <Text style={styles.subtitle}>
-            {canAskAgain
-              ? 'Ilifa listens on this device so you can ask about the station by voice. Enable the microphone to continue.'
-              : 'Microphone access is turned off. Open settings, enable the microphone for this app, then return here.'}
-          </Text>
-          <Pressable onPress={() => void (canAskAgain ? beginListening() : openMicrophoneSettings())} style={styles.primary}>
-            <Text style={styles.primaryText}>{canAskAgain ? 'Enable microphone' : 'Open microphone settings'}</Text>
-          </Pressable>
-          <Pressable onPress={onContinueStory} style={styles.link}>
-            <Text style={styles.linkText}>Continue story</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {phase === 'error' ? (
-        <View testID="ask-ilifa-error">
-          <Text style={styles.title}>Something went wrong</Text>
-          <Text style={styles.subtitle}>{error}</Text>
-          <View style={styles.actions}>
-            <Pressable onPress={() => void retry()} style={styles.primary} testID="ask-ilifa-retry">
-              <Text style={styles.primaryText}>Retry</Text>
-            </Pressable>
-            <Pressable onPress={() => void beginListening()} style={styles.secondary}>
-              <Text style={styles.secondaryText}>Ask again</Text>
-            </Pressable>
-          </View>
-          <Pressable onPress={onContinueStory} style={styles.link}>
-            <Text style={styles.linkText}>Continue story</Text>
-          </Pressable>
-        </View>
-      ) : null}
+      )}
     </View>
   );
 }
 
-async function resolveReplyUri(response: IlifaAskResponse): Promise<string | null> {
-  if (response.audioUrl) return response.audioUrl;
-  if (!response.audioBase64) return null;
+function PulseRing({ color }: { color: string }) {
+  const pulse = useRef(new Animated.Value(0)).current;
 
-  const directory = FileSystem.cacheDirectory;
-  if (!directory) return null;
-  const extension = response.audioMimeType?.includes('mpeg') ? 'mp3' : 'wav';
-  const path = `${directory}ilifa-reply.${extension}`;
-  await FileSystem.writeAsStringAsync(path, response.audioBase64, { encoding: FileSystem.EncodingType.Base64 });
-  return path;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.55] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
+
+  return <Animated.View pointerEvents="none" style={[styles.pulse, { borderColor: color, opacity, transform: [{ scale }] }]} />;
+}
+
+function statusCopy(phase: VoiceState, language: IlifaLanguage) {
+  if (phase === 'processing') {
+    return {
+      title: language === 'xh' ? 'Ucinga...' : 'Thinking...',
+      subtitle: language === 'xh' ? 'Ilifa uva umbuzo wakho.' : 'Ilifa heard you and is answering.',
+    };
+  }
+  if (phase === 'speaking') {
+    return {
+      title: language === 'xh' ? 'Uyathetha' : 'Speaking',
+      subtitle: language === 'xh' ? 'Thetha ukuphazamisa.' : 'Speak to interrupt, or wait and ask again.',
+    };
+  }
+  return {
+    title: language === 'xh' ? 'Uyamamela...' : 'Listening...',
+    subtitle: language === 'xh' ? 'Thetha ngokukhululekileyo.' : 'Speak naturally. Ilifa will answer, then listen again.',
+  };
+}
+
+function rootMeanSquare(samples: Int16Array): number {
+  if (samples.length === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i += 1) {
+    const value = samples[i] ?? 0;
+    sum += value * value;
+  }
+  return Math.sqrt(sum / samples.length);
 }
 
 function LanguageChip({
@@ -389,33 +691,30 @@ function LanguageChip({
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: 18, padding: 14, backgroundColor: 'rgba(21,18,42,0.93)', borderWidth: 1, borderColor: '#554A85', marginBottom: 14 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(7,7,17,0.62)', padding: 16, paddingBottom: 28 },
+  sheet: { borderRadius: 22, padding: 16, backgroundColor: 'rgba(21,18,42,0.97)', borderWidth: 1, borderColor: '#554A85' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   eyebrow: { color: ui.accent, fontSize: 8, letterSpacing: 1.4, fontWeight: '700' },
-  langRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
+  langRow: { flexDirection: 'row', gap: 6, marginBottom: 14 },
   langChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: '#201C3D', borderWidth: 1, borderColor: '#3E3762' },
   langChipActive: { backgroundColor: 'rgba(185,156,255,0.22)', borderColor: ui.primary },
   langChipText: { color: ui.mutedForeground, fontSize: 10, fontWeight: '700' },
   langChipTextActive: { color: ui.foreground },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  mic: { width: 36, height: 36, borderRadius: 12, backgroundColor: ui.primary, alignItems: 'center', justifyContent: 'center' },
-  speak: { backgroundColor: ui.accent },
-  copy: { flex: 1 },
-  title: { color: ui.foreground, fontSize: 15, fontWeight: '700' },
-  subtitle: { color: '#D1CCD9', fontSize: 12, marginTop: 4, lineHeight: 17 },
+  voiceBlock: { alignItems: 'center', marginBottom: 14 },
+  voiceMic: { width: 84, height: 84, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  voiceCore: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  pulse: { position: 'absolute', width: 56, height: 56, borderRadius: 28, borderWidth: 2 },
+  launchButton: { width: 46, minHeight: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  launchCore: { width: 46, height: 46, borderRadius: 23, backgroundColor: ui.primary, alignItems: 'center', justifyContent: 'center' },
+  title: { color: ui.foreground, fontSize: 15, fontWeight: '700', textAlign: 'center' },
+  subtitle: { color: '#D1CCD9', fontSize: 12, marginTop: 4, lineHeight: 17, textAlign: 'center' },
   quote: { color: ui.mutedForeground, fontSize: 12, fontStyle: 'italic', marginBottom: 10 },
-  typeInstead: { color: ui.mutedForeground, fontSize: 11, marginBottom: 12 },
-  typedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  typeInstead: { color: ui.mutedForeground, fontSize: 11, marginBottom: 4, textAlign: 'center' },
+  typedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   input: { flex: 1, minHeight: 40, borderRadius: 12, paddingHorizontal: 12, color: ui.foreground, backgroundColor: '#201C3D', fontSize: 13 },
   send: { width: 36, height: 36, borderRadius: 12, backgroundColor: ui.primary, alignItems: 'center', justifyContent: 'center' },
-  answer: { color: '#D4D0DB', fontSize: 13, lineHeight: 20, marginBottom: 8 },
-  noAudio: { color: ui.mutedForeground, fontSize: 10, marginBottom: 10 },
+  answer: { color: '#D4D0DB', fontSize: 13, lineHeight: 20, marginBottom: 10 },
   center: { alignItems: 'center', gap: 10, paddingVertical: 16 },
-  actions: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  primary: { minHeight: 44, borderRadius: 16, backgroundColor: ui.primary, alignItems: 'center', justifyContent: 'center' },
+  primary: { minHeight: 44, borderRadius: 16, backgroundColor: ui.primary, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   primaryText: { color: '#0B0A13', fontWeight: '700', fontSize: 13 },
-  secondary: { flex: 1, minHeight: 40, borderRadius: 14, backgroundColor: '#262141', borderWidth: 1, borderColor: '#7564B7', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, paddingHorizontal: 10 },
-  secondaryText: { color: ui.foreground, fontWeight: '700', fontSize: 11 },
-  link: { alignItems: 'center', paddingVertical: 10 },
-  linkText: { color: ui.accent, fontSize: 12, fontWeight: '700' },
 });

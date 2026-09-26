@@ -40,9 +40,15 @@ jest.mock('@/components/NarrationPlayer', () => ({
   NarrationPlayer: () => null,
 }));
 
-jest.mock('@/components/AskIlifa', () => ({
-  AskIlifa: () => null,
-}));
+jest.mock('@/components/AskIlifa', () => {
+  const React = require('react');
+  const { Pressable } = require('react-native');
+  return {
+    AskIlifa: () => null,
+    AskIlifaMicButton: ({ onPress }: { onPress: () => void }) =>
+      React.createElement(Pressable, { testID: 'ask-ilifa-open', onPress, accessibilityLabel: 'Ask Ilifa' }),
+  };
+});
 
 jest.mock('@/components/StationAmbience', () => ({
   StationAmbience: () => null,

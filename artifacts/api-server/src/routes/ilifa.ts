@@ -3,8 +3,10 @@ import {
   generateIlifaResponse,
   IlifaServiceError,
   normalizeLanguage,
+  payloadContainsSecret,
   type IlifaHistoryTurn,
 } from "../services/gemini.ts";
+import { createIlifaLiveToken } from "../services/geminiLive.ts";
 import { logger } from "../lib/logger.ts";
 
 const router: IRouter = Router();
@@ -17,6 +19,13 @@ export type AskIlifaBody = {
   audioMimeType?: unknown;
   selectedFeature?: unknown;
   history?: unknown;
+  language?: unknown;
+};
+
+export type LiveTokenBody = {
+  site?: unknown;
+  period?: unknown;
+  selectedFeature?: unknown;
   language?: unknown;
 };
 
@@ -66,6 +75,20 @@ export function validateAskIlifaBody(body: AskIlifaBody):
   };
 }
 
+export function validateLiveTokenBody(body: LiveTokenBody):
+  | { ok: true; value: Parameters<typeof createIlifaLiveToken>[0] }
+  | { ok: false; message: string } {
+  const site = asOptionalString(body.site) ?? "east_london_railway_station";
+  const period = asOptionalString(body.period) ?? "early_1900s";
+  const selectedFeature = asOptionalString(body.selectedFeature);
+  const language = normalizeLanguage(asOptionalString(body.language));
+
+  return {
+    ok: true,
+    value: { site, period, selectedFeature, language },
+  };
+}
+
 function sendError(res: Response, error: unknown) {
   if (error instanceof IlifaServiceError) {
     res.status(error.status).json({ message: error.message, code: error.code });
@@ -94,6 +117,24 @@ router.post("/ilifa/ask", async (req: Request, res: Response) => {
       audioMimeType: result.audioMimeType,
       sourceTopics: result.sourceTopics,
     });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.post("/ilifa/live-token", async (req: Request, res: Response) => {
+  const parsed = validateLiveTokenBody((req.body ?? {}) as LiveTokenBody);
+  if (!parsed.ok) {
+    res.status(400).json({ message: parsed.message, code: "invalid_request" });
+    return;
+  }
+
+  try {
+    const result = await createIlifaLiveToken(parsed.value);
+    if (payloadContainsSecret(result)) {
+      throw new IlifaServiceError("The heritage guide is unavailable right now.", 502, "unsafe_payload");
+    }
+    res.json(result);
   } catch (error) {
     sendError(res, error);
   }

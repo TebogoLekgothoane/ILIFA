@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "dev": "pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --experimental-strip-types src/data/heritage.test.ts src/services/gemini.test.ts src/routes/ilifa.test.ts src/lib/wav.test.ts src/lib/loadEnv.test.ts"
+    "test": "node --test --experimental-strip-types src/data/heritage.test.ts src/services/gemini.test.ts src/services/geminiLive.test.ts src/routes/ilifa.test.ts src/routes/ilifa.live.test.ts src/lib/wav.test.ts src/lib/loadEnv.test.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

@@ -37,6 +37,18 @@ export type IlifaAskResponse = {
   sourceTopics: string[];
 };
 
+export type IlifaLiveTokenRequest = IlifaGuideContext & {
+  language?: IlifaLanguage;
+};
+
+export type IlifaLiveTokenResponse = {
+  token: string;
+  model: string;
+  wsUrl: string;
+  expireTime: string;
+  newSessionExpireTime?: string;
+};
+
 export class IlifaClientError extends Error {
   code: string;
   status?: number;
@@ -129,6 +141,69 @@ export async function generateIlifaResponse(
     if (error instanceof IlifaClientError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
       throw new IlifaClientError('Ilifa took too long to answer. Please try again.', 'timeout');
+    }
+    throw new IlifaClientError('The heritage guide could not be reached. Check that the backend is running.', 'backend_unavailable');
+  } finally {
+    clearTimeout(timeout);
+    options?.signal?.removeEventListener('abort', onAbort);
+  }
+}
+
+export async function fetchIlifaLiveToken(
+  request: IlifaLiveTokenRequest,
+  options?: { signal?: AbortSignal; timeoutMs?: number },
+): Promise<IlifaLiveTokenResponse> {
+  const timeoutMs = options?.timeoutMs ?? 20_000;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  const onAbort = () => controller.abort();
+  options?.signal?.addEventListener('abort', onAbort);
+
+  try {
+    const response = await fetch(`${getIlifaApiBaseUrl()}/api/ilifa/live-token`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+
+    const data = (await response.json().catch(() => null)) as
+      | (Partial<IlifaLiveTokenResponse> & { message?: string; code?: string })
+      | null;
+
+    if (!response.ok) {
+      const mapped = messageForStatus(response.status, data?.message ?? '');
+      throw new IlifaClientError(mapped.message, data?.code ?? mapped.code, response.status);
+    }
+
+    const token = typeof data?.token === 'string' ? data.token.trim() : '';
+    const model = typeof data?.model === 'string' ? data.model.trim() : '';
+    const wsUrl = typeof data?.wsUrl === 'string' ? data.wsUrl.trim() : '';
+    const expireTime = typeof data?.expireTime === 'string' ? data.expireTime : '';
+
+    if (!token || !model || !wsUrl) {
+      throw new IlifaClientError('Could not start a live guide session.', 'invalid_response', response.status);
+    }
+
+    const payload: IlifaLiveTokenResponse = {
+      token,
+      model,
+      wsUrl,
+      expireTime,
+      newSessionExpireTime:
+        typeof data?.newSessionExpireTime === 'string' ? data.newSessionExpireTime : undefined,
+    };
+
+    if (JSON.stringify(payload).includes('AIza') || JSON.stringify(payload).includes('GEMINI_API_KEY')) {
+      throw new IlifaClientError('The heritage guide is unavailable right now.', 'unsafe_payload');
+    }
+
+    return payload;
+  } catch (error) {
+    if (error instanceof IlifaClientError) throw error;
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new IlifaClientError('Ilifa took too long to connect. Please try again.', 'timeout');
     }
     throw new IlifaClientError('The heritage guide could not be reached. Check that the backend is running.', 'backend_unavailable');
   } finally {
