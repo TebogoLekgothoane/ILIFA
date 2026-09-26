@@ -23,37 +23,55 @@ function webDirectionsUrl(coordinate: MapCoordinate) {
 export type TrailStop = {
   name: string;
   coordinates: MapCoordinate;
+  placeQuery?: string;
 };
-
-function coordinatePin(stop: TrailStop) {
-  return `${stop.coordinates.latitude},${stop.coordinates.longitude}`;
-}
 
 export function mapsAppName(os: typeof Platform.OS = Platform.OS) {
   return os === 'ios' ? 'Maps' : 'Google Maps';
 }
 
-function googleTrailDirectionsUrl(stops: TrailStop[]) {
-  if (stops.length === 1) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${coordinatePin(stops[0])}&travelmode=walking`;
+function placePin(stop: TrailStop) {
+  return stop.placeQuery?.trim() || `${stop.coordinates.latitude},${stop.coordinates.longitude}`;
+}
+
+function encodePlace(value: string) {
+  return encodeURIComponent(value);
+}
+
+/** Hardcoded place-name walking route for Google Maps. */
+export function googleTrailDirectionsUrlFromPlaces(places: string[]) {
+  if (places.length === 0) {
+    throw new Error('A trail needs at least one stop.');
   }
 
-  const origin = coordinatePin(stops[0]);
-  const destination = coordinatePin(stops[stops.length - 1]);
-  const waypoints = stops.slice(1, -1).map(coordinatePin).join('|');
-  const waypointQuery = waypoints ? `&waypoints=${waypoints}` : '';
+  if (places.length === 1) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodePlace(places[0])}&travelmode=walking`;
+  }
+
+  const origin = encodePlace(places[0]);
+  const destination = encodePlace(places[places.length - 1]);
+  const middle = places.slice(1, -1).map(encodePlace).join('%7C');
+  const waypointQuery = middle ? `&waypoints=${middle}` : '';
 
   return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypointQuery}&travelmode=walking`;
 }
 
-function appleTrailDirectionsUrl(stops: TrailStop[]) {
-  if (stops.length === 1) {
-    return `http://maps.apple.com/?daddr=${coordinatePin(stops[0])}&dirflg=w`;
+function appleTrailDirectionsUrlFromPlaces(places: string[]) {
+  if (places.length === 0) {
+    throw new Error('A trail needs at least one stop.');
   }
 
-  const origin = coordinatePin(stops[0]);
-  const destinations = stops.slice(1).map(coordinatePin).join('+to:');
+  if (places.length === 1) {
+    return `http://maps.apple.com/?daddr=${encodePlace(places[0])}&dirflg=w`;
+  }
+
+  const origin = encodePlace(places[0]);
+  const destinations = places.slice(1).map(encodePlace).join('+to:');
   return `http://maps.apple.com/?saddr=${origin}&daddr=${destinations}&dirflg=w`;
+}
+
+export function trailDirectionsUrlFromPlaces(places: string[], os: typeof Platform.OS = Platform.OS) {
+  return os === 'ios' ? appleTrailDirectionsUrlFromPlaces(places) : googleTrailDirectionsUrlFromPlaces(places);
 }
 
 export function trailDirectionsUrl(stops: TrailStop[], os: typeof Platform.OS = Platform.OS) {
@@ -61,14 +79,49 @@ export function trailDirectionsUrl(stops: TrailStop[], os: typeof Platform.OS = 
     throw new Error('A trail needs at least one stop.');
   }
 
-  return os === 'ios' ? appleTrailDirectionsUrl(stops) : googleTrailDirectionsUrl(stops);
+  const places = stops.map(placePin);
+  return trailDirectionsUrlFromPlaces(places, os);
 }
 
 export async function openTrailDirections(stops: TrailStop[]) {
+  const url = trailDirectionsUrl(stops);
+
   try {
-    await Linking.openURL(trailDirectionsUrl(stops));
+    await Linking.openURL(url);
   } catch {
-    Alert.alert('Navigation unavailable', `Unable to open this trail in ${mapsAppName()}.`);
+    // Prefer the web Google Maps place route as a fallback on every platform.
+    const places = stops.map(placePin);
+    const fallback = googleTrailDirectionsUrlFromPlaces(places);
+    if (fallback === url) {
+      Alert.alert('Navigation unavailable', `Unable to open this trail in ${mapsAppName()}.`);
+      return;
+    }
+
+    try {
+      await Linking.openURL(fallback);
+    } catch {
+      Alert.alert('Navigation unavailable', `Unable to open this trail in ${mapsAppName()}.`);
+    }
+  }
+}
+
+export async function openTrailPlaces(places: string[]) {
+  const url = trailDirectionsUrlFromPlaces(places);
+
+  try {
+    await Linking.openURL(url);
+  } catch {
+    const fallback = googleTrailDirectionsUrlFromPlaces(places);
+    if (fallback === url) {
+      Alert.alert('Navigation unavailable', `Unable to open this trail in ${mapsAppName()}.`);
+      return;
+    }
+
+    try {
+      await Linking.openURL(fallback);
+    } catch {
+      Alert.alert('Navigation unavailable', `Unable to open this trail in ${mapsAppName()}.`);
+    }
   }
 }
 

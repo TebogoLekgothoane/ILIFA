@@ -27,6 +27,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="experience" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="onboarding" options={{ presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="people-experiences" options={{ presentation: 'fullScreenModal' }} />
         <Stack.Screen name="site" />
         <Stack.Screen name="chat" />
         <Stack.Screen name="trail" />

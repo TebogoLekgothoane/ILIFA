@@ -1,5 +1,14 @@
 import { Alert, Linking, Platform } from 'react-native';
-import { directionsUrl, openDirections, openTrailDirections, trailDirectionsUrl } from '@/lib/directions';
+import {
+  directionsUrl,
+  googleTrailDirectionsUrlFromPlaces,
+  openDirections,
+  openTrailDirections,
+  openTrailPlaces,
+  trailDirectionsUrl,
+  trailDirectionsUrlFromPlaces,
+} from '@/lib/directions';
+import { heritageTrailMapPlaces } from '@/data/pastport';
 
 describe('directions', () => {
   const coordinate = { latitude: -33.0153, longitude: 27.9116 };
@@ -38,28 +47,56 @@ describe('directions', () => {
     );
   });
 
-  it('builds one walking route that includes every trail stop in order', () => {
+  it('builds one walking route from hardcoded place names', () => {
+    expect(googleTrailDirectionsUrlFromPlaces(heritageTrailMapPlaces)).toBe(
+      "https://www.google.com/maps/dir/?api=1&origin=East%20London%20Railway%20Station%2C%20Station%20Street%2C%20East%20London%2C%20South%20Africa&destination=East%20London%20Museum%2C%20Upper%20Oxford%20Street%2C%20East%20London%2C%20South%20Africa&waypoints=City%20Hall%2C%20Oxford%20Street%2C%20East%20London%2C%20South%20Africa%7CLatimer's%20Landing%2C%20East%20London%20Harbour%2C%20South%20Africa%7CFort%20Glamorgan%2C%20East%20London%2C%20South%20Africa&travelmode=walking",
+    );
+
+    Platform.OS = 'ios';
+    expect(trailDirectionsUrlFromPlaces(heritageTrailMapPlaces, 'ios')).toContain('maps.apple.com');
+    expect(trailDirectionsUrlFromPlaces(heritageTrailMapPlaces, 'ios')).toContain('dirflg=w');
+  });
+
+  it('prefers placeQuery labels when building a trail from stops', () => {
     const stops = [
-      { name: 'Railway Station', coordinates: { latitude: -33.0153, longitude: 27.9116 } },
-      { name: 'Historical Square', coordinates: { latitude: -33.01474, longitude: 27.90418 } },
-      { name: "Latimer's Landing", coordinates: { latitude: -33.02201, longitude: 27.89522 } },
-      { name: 'Fort Glamorgan', coordinates: { latitude: -33.03012, longitude: 27.90396 } },
-      { name: 'East London Museum', coordinates: { latitude: -32.99591, longitude: 27.89539 } },
+      {
+        name: 'Railway Station',
+        coordinates: coordinate,
+        placeQuery: 'East London Railway Station, Station Street, East London, South Africa',
+      },
+      {
+        name: 'Fort Glamorgan',
+        coordinates: { latitude: -33.03012, longitude: 27.90396 },
+        placeQuery: 'Fort Glamorgan, East London, South Africa',
+      },
     ];
 
     expect(trailDirectionsUrl(stops, 'android')).toBe(
-      'https://www.google.com/maps/dir/?api=1&origin=-33.0153,27.9116&destination=-32.99591,27.89539&waypoints=-33.01474,27.90418|-33.02201,27.89522|-33.03012,27.90396&travelmode=walking',
-    );
-    expect(trailDirectionsUrl(stops, 'ios')).toBe(
-      'http://maps.apple.com/?saddr=-33.0153,27.9116&daddr=-33.01474,27.90418+to:-33.02201,27.89522+to:-33.03012,27.90396+to:-32.99591,27.89539&dirflg=w',
+      'https://www.google.com/maps/dir/?api=1&origin=East%20London%20Railway%20Station%2C%20Station%20Street%2C%20East%20London%2C%20South%20Africa&destination=Fort%20Glamorgan%2C%20East%20London%2C%20South%20Africa&travelmode=walking',
     );
   });
 
-  it('opens the full trail in Google Maps', async () => {
+  it('opens the full trail in Google Maps from hardcoded places', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never);
+
+    await openTrailPlaces(heritageTrailMapPlaces);
+
+    expect(openURL).toHaveBeenCalledWith(trailDirectionsUrlFromPlaces(heritageTrailMapPlaces));
+  });
+
+  it('opens a trail from stop objects that include place queries', async () => {
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never);
     const stops = [
-      { name: 'Railway Station', coordinates: coordinate },
-      { name: 'Fort Glamorgan', coordinates: { latitude: -33.03012, longitude: 27.90396 } },
+      {
+        name: 'Railway Station',
+        coordinates: coordinate,
+        placeQuery: 'East London Railway Station, Station Street, East London, South Africa',
+      },
+      {
+        name: 'Fort Glamorgan',
+        coordinates: { latitude: -33.03012, longitude: 27.90396 },
+        placeQuery: 'Fort Glamorgan, East London, South Africa',
+      },
     ];
 
     await openTrailDirections(stops);

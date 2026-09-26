@@ -5,19 +5,25 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import ExploreMap from '@/components/ExploreMap';
 import { Pill, ScreenShell, SectionHeading, TopBar, ui } from '@/components/PastportUI';
 import { usePastport } from '@/context/PastportContext';
-import { provinces, station } from '@/data/pastport';
+import { mockPhotographs, placesByIds, provinces } from '@/data/pastport';
 import { provinceWithVisits, regionForPlaces, visitedPlacesInProvince } from '@/lib/visitedPlaces';
 
 export default function SavedScreen() {
-  const { savedSites, visitedSites } = usePastport();
+  const { savedSites, visitedSites, toggleSaved } = usePastport();
   const [selectedProvince, setSelectedProvince] = useState<string | null>(null);
+  const [editingSaved, setEditingSaved] = useState(false);
   const provinceName = selectedProvince ?? provinceWithVisits(visitedSites) ?? provinces[0].name;
   const province = provinces.find((item) => item.name === provinceName) ?? provinces[0];
   const visited = visitedPlacesInProvince(visitedSites, province.name);
+  const savedPlaces = placesByIds(savedSites);
   const region = regionForPlaces(
     visited.map((place) => place.coordinates),
     province,
   );
+
+  function openPlace() {
+    router.push('/site');
+  }
 
   return (
     <ScreenShell>
@@ -58,31 +64,52 @@ export default function SavedScreen() {
             description: place.province,
             coordinate: place.coordinates,
             featured: true,
-            onPress: () => router.push('/site'),
+            onPress: openPlace,
           }))}
         />
         {visited.length === 0 ? (
           <Text style={styles.journeyEmpty}>Visit a place in {province.name} and it will show up here.</Text>
         ) : (
           visited.map((place) => (
-            <Pressable key={place.id} style={styles.visitRow} onPress={() => router.push('/site')}>
+            <Pressable key={place.id} style={styles.visitRow} onPress={openPlace}>
               <Feather name="map-pin" size={14} color={ui.accent} />
-              <Text style={styles.visitName}>{place.name}</Text>
+              <View style={styles.visitCopy}>
+                <Text style={styles.visitName}>{place.name}</Text>
+                <Text style={styles.visitMeta}>{place.era} · {place.type}</Text>
+              </View>
               <Feather name="chevron-right" size={16} color={ui.mutedForeground} />
             </Pressable>
           ))
         )}
       </View>
-      <SectionHeading title="Saved experiences" action="Edit" onAction={() => undefined} />
-      {savedSites.length > 0 ? (
-        <Pressable style={styles.savedRow} onPress={() => router.push('/site')}>
-          <Image source={station.hero} style={styles.savedImage} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.savedTitle}>{station.name}</Text>
-            <Text style={styles.savedMeta}>1920 · Historical site</Text>
-          </View>
-          <Feather name="chevron-right" size={17} color={ui.mutedForeground} />
-        </Pressable>
+      <SectionHeading
+        title="Saved experiences"
+        action={editingSaved ? 'Done' : 'Edit'}
+        onAction={() => setEditingSaved((current) => !current)}
+      />
+      {savedPlaces.length > 0 ? (
+        savedPlaces.map((place) => (
+          <Pressable key={place.id} style={styles.savedRow} onPress={openPlace}>
+            <Image source={place.image} style={styles.savedImage} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.savedTitle}>{place.name}</Text>
+              <Text style={styles.savedMeta}>{place.era} · {place.type}</Text>
+            </View>
+            {editingSaved ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${place.name}`}
+                hitSlop={8}
+                onPress={() => toggleSaved(place.id)}
+                style={styles.removeButton}
+              >
+                <Feather name="trash-2" size={16} color="#E8A0A0" />
+              </Pressable>
+            ) : (
+              <Feather name="chevron-right" size={17} color={ui.mutedForeground} />
+            )}
+          </Pressable>
+        ))
       ) : (
         <View style={styles.empty}>
           <View style={styles.emptyIcon}>
@@ -96,10 +123,22 @@ export default function SavedScreen() {
         </View>
       )}
       <SectionHeading title="Your photographs" />
-      <View style={styles.photoEmpty}>
-        <Feather name="image" size={19} color={ui.mutedForeground} />
-        <Text style={styles.photoText}>Historical photographs you save will appear here.</Text>
-      </View>
+      {mockPhotographs.length > 0 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+          {mockPhotographs.map((photo) => (
+            <View key={photo.id} style={styles.photoCard}>
+              <Image source={photo.image} style={styles.photoImage} />
+              <Text style={styles.photoTitle}>{photo.title}</Text>
+              <Text style={styles.photoMeta}>{photo.placeName} · {photo.year}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={styles.photoEmpty}>
+          <Feather name="image" size={19} color={ui.mutedForeground} />
+          <Text style={styles.photoText}>Historical photographs you save will appear here.</Text>
+        </View>
+      )}
     </ScreenShell>
   );
 }
@@ -117,16 +156,24 @@ const styles = StyleSheet.create({
   journeyMap: { height: 240, marginTop: 14, marginBottom: 12 },
   journeyEmpty: { color: ui.mutedForeground, fontSize: 12, lineHeight: 18 },
   visitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  visitName: { color: ui.foreground, fontSize: 13, fontWeight: '700', flex: 1 },
-  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: ui.card, padding: 10, borderRadius: 20, marginBottom: 25 },
+  visitCopy: { flex: 1 },
+  visitName: { color: ui.foreground, fontSize: 13, fontWeight: '700' },
+  visitMeta: { color: ui.mutedForeground, fontSize: 11, marginTop: 2 },
+  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 13, backgroundColor: ui.card, padding: 10, borderRadius: 20, marginBottom: 12 },
   savedImage: { width: 62, height: 62, borderRadius: 15 },
   savedTitle: { color: ui.foreground, fontSize: 14, fontWeight: '700' },
   savedMeta: { color: ui.mutedForeground, fontSize: 11, marginTop: 5 },
+  removeButton: { width: 34, height: 34, borderRadius: 12, backgroundColor: '#2A1F33', alignItems: 'center', justifyContent: 'center' },
   empty: { alignItems: 'center', backgroundColor: ui.card, padding: 27, borderRadius: 22, marginBottom: 27 },
   emptyIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: '#24203E', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   emptyTitle: { color: ui.foreground, fontSize: 15, fontWeight: '700' },
   emptyCopy: { color: ui.mutedForeground, fontSize: 12, marginTop: 6, textAlign: 'center' },
   emptyAction: { color: ui.accent, fontSize: 12, fontWeight: '700', marginTop: 15 },
+  photoRow: { gap: 12, paddingRight: 8, marginBottom: 8 },
+  photoCard: { width: 148 },
+  photoImage: { width: 148, height: 110, borderRadius: 16, marginBottom: 8 },
+  photoTitle: { color: ui.foreground, fontSize: 12, fontWeight: '700' },
+  photoMeta: { color: ui.mutedForeground, fontSize: 10, marginTop: 3 },
   photoEmpty: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 15, backgroundColor: ui.card, borderRadius: 18 },
   photoText: { color: ui.mutedForeground, fontSize: 12, flex: 1 },
 });

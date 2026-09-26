@@ -28,6 +28,14 @@ jest.mock('@/components/ExploreMap', () => ({
   default: () => null,
 }));
 
+jest.mock('@/components/PeopleExperiencesSection', () => ({
+  PeopleExperiencesSection: () => null,
+}));
+
+jest.mock('@/components/BookableExperiencesSection', () => ({
+  BookableExperiencesSection: () => null,
+}));
+
 jest.mock('@/components/PastportUI', () => {
   const React = require('react');
   const { Pressable, View, Text } = require('react-native');

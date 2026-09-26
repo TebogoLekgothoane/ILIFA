@@ -102,8 +102,9 @@ describe('ExperienceScreen demo camera feed', () => {
     });
 
     expect(screen.getByTestId('model-stage')).toBeTruthy();
-    expect(screen.getByTestId('model-gesture-area')).toBeTruthy();
-    expect(screen.getByText('Drag to orbit · pinch to zoom')).toBeTruthy();
+    expect(screen.getByTestId('then-now-image')).toBeTruthy();
+    expect(screen.queryByTestId('model-gesture-area')).toBeNull();
+    expect(screen.getByText('Then and now: the station in 1950 beside today.')).toBeTruthy();
     expect(screen.getByTestId('story-rail')).toBeTruthy();
     expect(screen.getByText('The arrival hall')).toBeTruthy();
     expect(screen.getByTestId('experience-narration')).toBeTruthy();
@@ -114,6 +115,32 @@ describe('ExperienceScreen demo camera feed', () => {
 
     fireEvent.press(screen.getByTestId('story-sheet-close'));
     expect(screen.queryByTestId('story-video-sheet')).toBeNull();
+
+    expect(screen.getByTestId('people-experiences-entry')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('people-experiences-entry'));
+    const { router } = require('expo-router');
+    expect(router.push).toHaveBeenCalledWith('/people-experiences');
+
+    fireEvent.press(screen.getByText('1920'));
+    expect(screen.getByTestId('then-now-image')).toBeTruthy();
+    expect(screen.getByText('Then and now: the station in 1920 beside today.')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('1950'));
+    expect(screen.getByTestId('then-now-image')).toBeTruthy();
+    expect(screen.getByText('Then and now: the station in 1950 beside today.')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('2026'));
+    expect(screen.getByTestId('present-preview-image')).toBeTruthy();
+    expect(screen.queryByTestId('model-gesture-area')).toBeNull();
+    expect(screen.getByText('Today’s station. A 3D reconstruction appears in a moment.')).toBeTruthy();
+
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(screen.queryByTestId('present-preview-image')).toBeNull();
+    expect(screen.getByTestId('model-gesture-area')).toBeTruthy();
+    expect(screen.getByText('Today’s station in 3D. Drag to orbit · pinch to zoom.')).toBeTruthy();
 
     screen.unmount();
     jest.useRealTimers();

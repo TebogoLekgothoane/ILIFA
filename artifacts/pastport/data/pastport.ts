@@ -94,6 +94,17 @@ export type HeritagePlace = {
   name: string;
   province: string;
   coordinates: MapCoordinate;
+  era: string;
+  type: string;
+  image: typeof stationHero;
+};
+
+export type SavedPhotograph = {
+  id: string;
+  title: string;
+  placeName: string;
+  year: string;
+  image: typeof stationHero;
 };
 
 export const provinces: Province[] = [
@@ -114,8 +125,114 @@ export const places: HeritagePlace[] = [
     name: station.name,
     province: 'Eastern Cape',
     coordinates: station.coordinates,
+    era: '1920',
+    type: 'Historical site',
+    image: station.hero,
+  },
+  {
+    id: 'fort-glamorgan',
+    name: 'Fort Glamorgan',
+    province: 'Eastern Cape',
+    coordinates: { latitude: -33.03012, longitude: 27.90396 },
+    era: '1847',
+    type: 'Fort',
+    image: trailHero,
+  },
+  {
+    id: 'east-london-museum',
+    name: 'East London Museum',
+    province: 'Eastern Cape',
+    coordinates: { latitude: -32.99591, longitude: 27.89539 },
+    era: 'Present',
+    type: 'Museum',
+    image: station1920,
+  },
+  {
+    id: 'castle-of-good-hope',
+    name: 'Castle of Good Hope',
+    province: 'Western Cape',
+    coordinates: { latitude: -33.9258, longitude: 18.4276 },
+    era: '1666',
+    type: 'Fort',
+    image: trailHero,
+  },
+  {
+    id: 'robben-island',
+    name: 'Robben Island',
+    province: 'Western Cape',
+    coordinates: { latitude: -33.8067, longitude: 18.3662 },
+    era: '1960s',
+    type: 'World Heritage Site',
+    image: station1920,
+  },
+  {
+    id: 'union-buildings',
+    name: 'Union Buildings',
+    province: 'Gauteng',
+    coordinates: { latitude: -25.7403, longitude: 28.2119 },
+    era: '1913',
+    type: 'Civic landmark',
+    image: station.hero,
+  },
+  {
+    id: 'constitution-hill',
+    name: 'Constitution Hill',
+    province: 'Gauteng',
+    coordinates: { latitude: -26.1887, longitude: 28.0426 },
+    era: '1893',
+    type: 'Heritage precinct',
+    image: trailHero,
+  },
+  {
+    id: 'ulundi-battlefield',
+    name: 'Ulundi Battlefield',
+    province: 'KwaZulu-Natal',
+    coordinates: { latitude: -28.335, longitude: 31.416 },
+    era: '1879',
+    type: 'Battlefield',
+    image: station1920,
   },
 ];
+
+/** Demo archive seeded on first launch when local storage is empty. */
+export const mockVisitedSiteIds = [
+  station.id,
+  'fort-glamorgan',
+  'castle-of-good-hope',
+  'union-buildings',
+  'ulundi-battlefield',
+];
+
+export const mockSavedSiteIds = [station.id, 'robben-island', 'constitution-hill'];
+
+export const mockPhotographs: SavedPhotograph[] = [
+  {
+    id: 'photo-station-hall',
+    title: 'Arrival hall light',
+    placeName: station.name,
+    year: '1920',
+    image: station.hero,
+  },
+  {
+    id: 'photo-platform',
+    title: 'Steam on the platform',
+    placeName: station.name,
+    year: '1920',
+    image: station1920,
+  },
+  {
+    id: 'photo-harbour',
+    title: 'Harbour edge walk',
+    placeName: 'Latimer’s Landing',
+    year: '1938',
+    image: trailHero,
+  },
+];
+
+export function placesByIds(ids: string[]): HeritagePlace[] {
+  const byId = new Map(places.map((place) => [place.id, place]));
+  return ids.map((id) => byId.get(id)).filter((place): place is HeritagePlace => Boolean(place));
+}
 
 export const trail = {
   id: 'east-london-heritage-trail',
@@ -127,13 +244,82 @@ export const trail = {
     'A self-guided walk through the city’s railway, civic, and coastal histories.',
   image: trailHero,
   locations: [
-    { name: 'Railway Station', time: 'Start here', period: '1920', done: true, coordinates: station.coordinates },
-    { name: 'Historical Square', time: '12 min walk', period: '1910', done: true, coordinates: { latitude: -33.01474, longitude: 27.90418 } },
-    { name: "Latimer's Landing", time: '18 min walk', period: '1938', done: true, coordinates: { latitude: -33.02201, longitude: 27.89522 } },
-    { name: 'Fort Glamorgan', time: '25 min walk', period: '1847', done: false, coordinates: { latitude: -33.03012, longitude: 27.90396 } },
-    { name: 'East London Museum', time: '20 min walk', period: 'Present', done: false, coordinates: { latitude: -32.99591, longitude: 27.89539 } },
+    {
+      name: 'Railway Station',
+      time: 'Start here',
+      period: '1920',
+      done: true,
+      coordinates: station.coordinates,
+      placeQuery: 'East London Railway Station, Station Street, East London, South Africa',
+    },
+    {
+      name: 'Historical Square',
+      time: '12 min walk',
+      period: '1910',
+      done: true,
+      coordinates: { latitude: -33.01474, longitude: 27.90418 },
+      placeQuery: 'City Hall, Oxford Street, East London, South Africa',
+    },
+    {
+      name: "Latimer's Landing",
+      time: '18 min walk',
+      period: '1938',
+      done: true,
+      coordinates: { latitude: -33.02201, longitude: 27.89522 },
+      placeQuery: "Latimer's Landing, East London Harbour, South Africa",
+    },
+    {
+      name: 'Fort Glamorgan',
+      time: '25 min walk',
+      period: '1847',
+      done: false,
+      coordinates: { latitude: -33.03012, longitude: 27.90396 },
+      placeQuery: 'Fort Glamorgan, East London, South Africa',
+    },
+    {
+      name: 'East London Museum',
+      time: '20 min walk',
+      period: 'Present',
+      done: false,
+      coordinates: { latitude: -32.99591, longitude: 27.89539 },
+      placeQuery: 'East London Museum, Upper Oxford Street, East London, South Africa',
+    },
   ],
 };
+
+/** Hardcoded Google/Apple Maps place strings for the heritage walking route. */
+export const heritageTrailMapPlaces = trail.locations.map((location) => location.placeQuery);
+
+export const moreTrails = [
+  {
+    id: 'rail-and-industry',
+    title: 'Rail & Industry',
+    meta: '2.4 km · 5 places',
+    icon: 'truck' as const,
+    description: 'Follow the goods yards and industrial edge of the port city.',
+    mapPlaces: [
+      'East London Railway Station, Station Street, East London, South Africa',
+      'East London Harbour, Quigney, East London, South Africa',
+      "Latimer's Landing, East London Harbour, South Africa",
+      'Fort Glamorgan, East London, South Africa',
+      'East London Museum, Upper Oxford Street, East London, South Africa',
+    ],
+  },
+  {
+    id: 'coastal-stories',
+    title: 'Coastal Stories',
+    meta: '3.1 km · 6 places',
+    icon: 'wind' as const,
+    description: 'A harbour-to-beach walk through East London’s coastal memory.',
+    mapPlaces: [
+      "Latimer's Landing, East London Harbour, South Africa",
+      'Orient Beach, East London, South Africa',
+      'Eastern Beach, East London, South Africa',
+      'Nahoon Beach, East London, South Africa',
+      'East London Museum, Upper Oxford Street, East London, South Africa',
+    ],
+  },
+];
 
 export const badges = [
   { title: 'FIRST STEP', description: 'Visited your first historical site.', earned: true },

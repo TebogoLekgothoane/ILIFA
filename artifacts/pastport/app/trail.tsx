@@ -1,10 +1,10 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { ImageBackground, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { trail } from '@/data/pastport';
-import { mapsAppName, openTrailDirections } from '@/lib/directions';
+import { heritageTrailMapPlaces, trail } from '@/data/pastport';
+import { mapsAppName, openTrailPlaces } from '@/lib/directions';
 import { PrimaryButton, ui } from '@/components/PastportUI';
 
 export default function TrailDetailScreen() {
@@ -12,22 +12,66 @@ export default function TrailDetailScreen() {
 
   async function startTrail() {
     setStarted(true);
-    await openTrailDirections(trail.locations);
+    await openTrailPlaces(heritageTrailMapPlaces);
   }
 
-  return <View style={styles.screen}><ImageBackground source={trail.image} style={styles.cover}><LinearGradient colors={['rgba(8,8,18,0.25)', 'rgba(8,8,18,0.98)']} style={StyleSheet.absoluteFill} /><Pressable style={styles.back} onPress={() => router.back()}><Feather name="arrow-left" size={19} color={ui.foreground} /></Pressable><View style={styles.coverText}><Text style={styles.eyebrow}>SELF-GUIDED HERITAGE TRAIL</Text><Text style={styles.title}>{trail.name}</Text><View style={styles.meta}><Text style={styles.metaItem}>{trail.duration}</Text><Text style={styles.metaDot}>•</Text><Text style={styles.metaItem}>{trail.distance}</Text><Text style={styles.metaDot}>•</Text><Text style={styles.metaItem}>{trail.stops} locations</Text></View></View></ImageBackground><ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 45 }} showsVerticalScrollIndicator={false}><Text style={styles.description}>{trail.description}</Text><View style={styles.progress}><View><Text style={styles.progressLabel}>{started ? 'TRAIL IN PROGRESS' : 'YOUR PROGRESS'}</Text><Text style={styles.progressTitle}>{started ? '3 / 8 locations discovered' : 'Ready when you are'}</Text></View><View style={styles.progressCircle}><Text style={styles.progressNumber}>{started ? '38%' : '0%'}</Text></View></View><Text style={styles.sectionTitle}>The route</Text>{trail.locations.map((location, index) => <View key={location.name} style={styles.stop}><View style={[styles.stopNumber, location.done && styles.stopDone]}>{location.done ? <Feather name="check" size={13} color="#0B0A13" /> : <Text style={styles.numberText}>{index + 1}</Text>}</View><View style={styles.stopLine} /><View style={{ flex: 1 }}><Text style={styles.stopName}>{location.name}</Text><Text style={styles.stopMeta}>{location.time} <Text style={styles.stopPeriod}>· {location.period}</Text></Text></View><Feather name={location.done ? 'check-circle' : 'circle'} size={16} color={location.done ? '#78D6A2' : ui.mutedForeground} /></View>)}{Platform.OS === 'ios' ? (
+  return (
+    <View style={styles.screen}>
+      <ImageBackground source={trail.image} style={styles.cover}>
+        <LinearGradient colors={['rgba(8,8,18,0.25)', 'rgba(8,8,18,0.98)']} style={StyleSheet.absoluteFill} />
+        <Pressable style={styles.back} onPress={() => router.back()}>
+          <Feather name="arrow-left" size={19} color={ui.foreground} />
+        </Pressable>
+        <View style={styles.coverText}>
+          <Text style={styles.eyebrow}>SELF-GUIDED HERITAGE TRAIL</Text>
+          <Text style={styles.title}>{trail.name}</Text>
+          <View style={styles.meta}>
+            <Text style={styles.metaItem}>{trail.duration}</Text>
+            <Text style={styles.metaDot}>•</Text>
+            <Text style={styles.metaItem}>{trail.distance}</Text>
+            <Text style={styles.metaDot}>•</Text>
+            <Text style={styles.metaItem}>{trail.stops} locations</Text>
+          </View>
+        </View>
+      </ImageBackground>
+      <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 45 }} showsVerticalScrollIndicator={false}>
+        <Text style={styles.description}>{trail.description}</Text>
+        <View style={styles.progress}>
+          <View>
+            <Text style={styles.progressLabel}>{started ? 'TRAIL IN PROGRESS' : 'YOUR PROGRESS'}</Text>
+            <Text style={styles.progressTitle}>{started ? '3 / 8 locations discovered' : 'Ready when you are'}</Text>
+          </View>
+          <View style={styles.progressCircle}>
+            <Text style={styles.progressNumber}>{started ? '38%' : '0%'}</Text>
+          </View>
+        </View>
+        <Text style={styles.sectionTitle}>The route</Text>
+        {trail.locations.map((location, index) => (
+          <View key={location.name} style={styles.stop}>
+            <View style={[styles.stopNumber, location.done && styles.stopDone]}>
+              {location.done ? <Feather name="check" size={13} color="#0B0A13" /> : <Text style={styles.numberText}>{index + 1}</Text>}
+            </View>
+            <View style={styles.stopLine} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stopName}>{location.name}</Text>
+              <Text style={styles.stopMeta}>
+                {location.time} <Text style={styles.stopPeriod}>· {location.period}</Text>
+              </Text>
+            </View>
+            <Feather name={location.done ? 'check-circle' : 'circle'} size={16} color={location.done ? '#78D6A2' : ui.mutedForeground} />
+          </View>
+        ))}
         <PrimaryButton
           label={started ? `Continue trail in ${mapsAppName()}` : `Start trail in ${mapsAppName()}`}
           icon="arrow-right"
-          onPress={() => { void startTrail(); }}
+          onPress={() => {
+            void startTrail();
+          }}
+          testID="start-trail"
         />
-      ) : (
-        <PrimaryButton
-          label={started ? `Continue trail in ${mapsAppName()}` : `Start trail in ${mapsAppName()}`}
-          icon="arrow-right"
-          onPress={() => { void startTrail(); }}
-        />
-      )}</ScrollView></View>;
+      </ScrollView>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

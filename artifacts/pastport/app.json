@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "PASTPORT",
-    "slug": "pastport",
+    "name": "Ilifa",
+    "slug": "ilifa",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "pastport",
+    "scheme": "ilifa",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSCameraUsageDescription": "PASTPORT uses the camera to place historical reconstructions over the real location.",
-        "NSLocationWhenInUseUsageDescription": "PASTPORT uses your location to find nearby historical places.",
+        "NSCameraUsageDescription": "Ilifa uses the camera to place historical reconstructions over the real location.",
+        "NSLocationWhenInUseUsageDescription": "Ilifa uses your location to find nearby historical places.",
         "NSMicrophoneUsageDescription": "Ilifa uses the microphone so you can ask questions about this historical place."
       }
     },
@@ -38,9 +38,10 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "PASTPORT uses the camera to place historical reconstructions over the real location."
+          "cameraPermission": "Ilifa uses the camera to place historical reconstructions over the real location."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

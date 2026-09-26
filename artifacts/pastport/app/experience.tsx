@@ -3,11 +3,17 @@ import { Feather } from '@expo/vector-icons';
 // import { useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View, Image } from 'react-native';
 // import { Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { station, periods } from '@/data/pastport';
 import eastLondonHistoryVideo from '@/assets/audio/East London History Video.mp4';
+import stationThenNow1920 from '@/assets/images/1920vs2026.png';
+import stationThenNow1950 from '@/assets/images/1950vs2026.png';
+import stationPresent from '@/assets/images/station-2026.png';
+import storyStationNow from '@/assets/images/story-station-now.jpg';
+import storyStationExperience from '@/assets/images/story-station-experience.jpg';
+import storyStationOld from '@/assets/images/story-station-old.jpg';
 import { usePastport } from '@/context/PastportContext';
 import { IconButton, Pill, ui } from '@/components/PastportUI';
 import { AskIlifa } from '@/components/AskIlifa';
@@ -17,9 +23,11 @@ import { DEFAULT_ILIFA_CONTEXT, periodForYear } from '@/lib/ilifa';
 import { HistoricalModel, ModelTransform } from '@/components/HistoricalModel';
 import { ModelControls, ModelOrbitSurface } from '@/components/ModelControls';
 import { ArRecognition } from '@/components/ArRecognition';
+import { PeopleExperiencesEntry } from '@/components/PeopleExperiencesEntry';
 import { StoryAd, StoryAds } from '@/components/StoryAds';
 import { StoryVideoSheet } from '@/components/StoryVideoSheet';
 import { ShowMeThenCamera } from '@/components/ShowMeThenCamera';
+import { experiencesForPlace } from '@/lib/peoplesExperiences';
 
 const INITIAL_MODEL_TRANSFORM: ModelTransform = {
   scale: 1.05,
@@ -29,6 +37,7 @@ const INITIAL_MODEL_TRANSFORM: ModelTransform = {
 
 const SCAN_MS = 2200;
 const DETECTED_MS = 1600;
+const PRESENT_PREVIEW_MS = 2000;
 
 const STORY_ADS: StoryAd[] = [
   {
@@ -36,7 +45,7 @@ const STORY_ADS: StoryAd[] = [
     title: 'East London history',
     line: 'A local voice on this place.',
     detail: 'A local telling of East London’s story, from the station and the harbour to the people who still carry this city’s memory.',
-    image: station.hero,
+    image: storyStationOld,
     speaker: 'Local voice',
     speakerRole: 'East London · history of this place',
     videoUrl: eastLondonHistoryVideo,
@@ -46,7 +55,7 @@ const STORY_ADS: StoryAd[] = [
     title: 'The arrival hall',
     line: 'The city’s first hello.',
     detail: 'Nomsa remembers selling fruit at the doors of this hall, and how the first sight of the station told people they had arrived in East London.',
-    image: station.hero,
+    image: storyStationExperience,
     speaker: 'Nomsa Dlamini',
     speakerRole: 'East London · lived beside the station',
     videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
@@ -56,7 +65,7 @@ const STORY_ADS: StoryAd[] = [
     title: 'The railway clock',
     line: 'Time on the concourse.',
     detail: 'Sipho talks about setting the day by the station clock — when trains left, when wages were paid, and when families waited.',
-    image: station.reconstruction,
+    image: storyStationNow,
     speaker: 'Sipho Nkosi',
     speakerRole: 'East London · former railway clerk',
     videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
@@ -66,7 +75,7 @@ const STORY_ADS: StoryAd[] = [
     title: 'Life on the platform',
     line: 'Journeys from this edge.',
     detail: 'Lindiwe describes the platform as the city’s edge: farewells at dawn, homecomings at dusk, and the stories that travelled with every train.',
-    image: station.hero,
+    image: storyStationNow,
     speaker: 'Lindiwe Jacobs',
     speakerRole: 'East London · grew up on the platform',
     videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
@@ -90,6 +99,7 @@ export default function ExperienceScreen() {
   const [modelOpacity, setModelOpacity] = useState(0.92);
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [showPresentModel, setShowPresentModel] = useState(false);
   const stageHeight = Math.min(300, Math.max(188, Math.round(height * 0.32)));
 
   // useEffect(() => {
@@ -106,14 +116,26 @@ export default function ExperienceScreen() {
     return () => clearTimeout(timeout);
   }, [phase]);
 
+  useEffect(() => {
+    if (phase !== 'ready' || year !== 2026) {
+      setShowPresentModel(false);
+      return undefined;
+    }
+    setShowPresentModel(false);
+    setModelError(null);
+    setModelTransform(INITIAL_MODEL_TRANSFORM);
+    setModelOpacity(0.92);
+    const timeout = setTimeout(() => setShowPresentModel(true), PRESENT_PREVIEW_MS);
+    return () => clearTimeout(timeout);
+  }, [phase, year]);
+
   function beginScan() {
     setYear(1950);
     setSelectedYear(1950);
-    setModelError(null);
     setSelectedStory(null);
     setNarrating(false);
     setAskIlifaOpen(false);
-    setModelTransform(INITIAL_MODEL_TRANSFORM);
+    setShowPresentModel(false);
     setPhase('scanning');
     markVisited(station.id);
   }
@@ -142,26 +164,27 @@ export default function ExperienceScreen() {
   // }
 
   // const cameraUnavailable = !cameraGranted || Boolean(cameraError);
-  const modelVisible = phase === 'ready' && year === 1950;
+  const thenNowSource = year === 1920 ? stationThenNow1920 : year === 1950 ? stationThenNow1950 : null;
+  const thenNowVisible = phase === 'ready' && thenNowSource != null;
+  const presentPreviewVisible = phase === 'ready' && year === 2026 && !showPresentModel;
+  const modelVisible = phase === 'ready' && year === 2026 && showPresentModel;
 
   function selectYear(nextYear: number) {
     setYear(nextYear);
     setSelectedYear(nextYear);
     setSelectedStory(null);
+    setNarrating(false);
+    setAskIlifaOpen(false);
     if (nextYear === 2026) {
-      setPhase('idle');
-      setNarrating(false);
-      setAskIlifaOpen(false);
+      if (phase !== 'idle') setPhase('ready');
       return;
     }
+    setShowPresentModel(false);
     if (nextYear === 1950) {
-      setModelError(null);
       if (phase !== 'ready') beginScan();
       return;
     }
     setPhase('ready');
-    setNarrating(false);
-    setAskIlifaOpen(false);
   }
 
   function openAskIlifa() {
@@ -212,19 +235,67 @@ export default function ExperienceScreen() {
         <View style={[styles.stage, { height: stageHeight }]} testID="model-stage">
           {phase === 'idle' ? <IdleViewfinder /> : null}
           {phase === 'detected' ? <ArRecognition phase={phase} /> : null}
-          {phase === 'ready' && year === 1920 ? <View style={styles.comingSoon}><Text style={styles.comingSoonTitle}>1920 reconstruction coming soon.</Text><Text style={styles.comingSoonCopy}>The 1950 station model is the one you can turn.</Text></View> : null}
+          {thenNowVisible && thenNowSource ? (
+            <Image
+              source={thenNowSource}
+              style={styles.thenNowImage}
+              resizeMode="cover"
+              accessibilityLabel={
+                year === 1920
+                  ? 'East London Railway Station in 1920 beside 2026'
+                  : 'East London Railway Station in 1950 beside 2026'
+              }
+              testID="then-now-image"
+            />
+          ) : null}
+          {presentPreviewVisible ? (
+            <Image
+              source={stationPresent}
+              style={styles.thenNowImage}
+              resizeMode="cover"
+              accessibilityLabel="East London Railway Station in 2026"
+              testID="present-preview-image"
+            />
+          ) : null}
           {modelVisible ? (
             <ModelOrbitSurface style={styles.modelViewport} transform={modelTransform} onTransformChange={setModelTransform}>
               <HistoricalModel visible opacity={modelOpacity} transform={modelTransform} onLoadingChange={setModelLoading} onError={setModelError} />
               {modelLoading ? <View style={styles.modelStatus}><Text style={styles.modelStatusText}>Reconstructing the past…</Text></View> : null}
-              {modelError ? <View style={styles.modelError}><Text style={styles.modelErrorTitle}>Unable to load the historical reconstruction.</Text><Pressable onPress={() => { setModelError(null); setPhase('scanning'); }}><Text style={styles.modelErrorAction}>Try again</Text></Pressable></View> : null}
+              {modelError ? (
+                <View style={styles.modelError}>
+                  <Text style={styles.modelErrorTitle}>Unable to load the historical reconstruction.</Text>
+                  <Pressable onPress={() => setModelError(null)}>
+                    <Text style={styles.modelErrorAction}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </ModelOrbitSurface>
           ) : null}
-          {modelVisible ? <ModelControls opacity={modelOpacity} onOpacityChange={setModelOpacity} onReset={() => { setModelTransform(INITIAL_MODEL_TRANSFORM); setModelOpacity(0.92); }} onTurn={turnModel} /> : null}
+          {modelVisible ? (
+            <ModelControls
+              opacity={modelOpacity}
+              onOpacityChange={setModelOpacity}
+              onReset={() => { setModelTransform(INITIAL_MODEL_TRANSFORM); setModelOpacity(0.92); }}
+              onTurn={turnModel}
+            />
+          ) : null}
         </View>
         )}
 
-        {phase === 'ready' ? <StoryAds stories={STORY_ADS} selectedId={selectedStory?.id ?? null} onSelect={(story) => { setNarrating(false); setSelectedStory(story); }} /> : <View style={styles.storySpacer} />}
+        {phase === 'ready' ? (
+          <>
+            <StoryAds stories={STORY_ADS} selectedId={selectedStory?.id ?? null} onSelect={(story) => { setNarrating(false); setSelectedStory(story); }} />
+            <PeopleExperiencesEntry
+              nearby={experiencesForPlace({ siteId: station.id, origin: station.coordinates }).length}
+              onPress={() => {
+                setSelectedStory(null);
+                setNarrating(false);
+                setAskIlifaOpen(false);
+                router.push('/people-experiences');
+              }}
+            />
+          </>
+        ) : <View style={styles.storySpacer} />}
 
         <View style={styles.footer}>
           {phase === 'ready' ? <View style={[styles.narration, (!narrating || askIlifaOpen) && styles.narrationHidden]} testID="experience-narration"><NarrationPlayer compact autoPlay={narrating && !askIlifaOpen} /></View> : null}
@@ -252,7 +323,18 @@ export default function ExperienceScreen() {
             <>
               <View style={styles.timeHeader}><Text style={styles.timeLabel}>TIME TRAVEL</Text><Text style={styles.timeValue}>{year}</Text></View>
               <View style={styles.yearChips}>{periods.map((period) => <Pill key={period.year} label={String(period.year)} active={year === period.year} onPress={() => selectYear(period.year)} />)}</View>
-              <View style={styles.disclaimer}><Feather name="info" size={12} color={ui.mutedForeground} /><Text style={styles.disclaimerText}>{phase === 'ready' ? 'Simulated recognition. Drag the model to see the station from other angles.' : 'Demo camera feed. Point at the building, then ask to see it then.'}</Text></View>
+              <View style={styles.disclaimer}>
+                <Feather name="info" size={12} color={ui.mutedForeground} />
+                <Text style={styles.disclaimerText}>
+                  {phase === 'ready'
+                    ? year === 2026
+                      ? showPresentModel
+                        ? 'Today’s station in 3D. Drag to orbit · pinch to zoom.'
+                        : 'Today’s station. A 3D reconstruction appears in a moment.'
+                      : `Then and now: the station in ${year} beside today.`
+                    : 'Demo camera feed. Point at the building, then ask to see it then.'}
+                </Text>
+              </View>
             </>
           )}
         </View>
@@ -296,9 +378,7 @@ const styles = StyleSheet.create({
   cameraEyebrow: { color: '#EDC48C', fontSize: 9, fontWeight: '700', letterSpacing: 1.5 },
   cameraTitle: { color: ui.foreground, fontSize: 22, fontWeight: '700', marginTop: 7, textAlign: 'center' },
   cameraCopy: { color: '#D1CCD9', fontSize: 12, marginTop: 4, textAlign: 'center' },
-  comingSoon: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  comingSoonTitle: { color: ui.foreground, fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  comingSoonCopy: { color: '#D1CCD9', fontSize: 12, marginTop: 6, textAlign: 'center' },
+  thenNowImage: { width: '100%', height: '100%' },
   modelStatus: { position: 'absolute', alignSelf: 'center', top: '42%', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 14, backgroundColor: 'rgba(16,13,31,0.88)', borderWidth: 1, borderColor: '#68549A' },
   modelStatusText: { color: ui.primary, fontSize: 11, fontWeight: '700' },
   modelError: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: 'rgba(28,20,41,0.92)' },

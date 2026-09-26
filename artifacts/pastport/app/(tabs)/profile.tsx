@@ -1,9 +1,10 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ScreenShell, SectionHeading, TopBar, ui } from '@/components/PastportUI';
 import { badges } from '@/data/pastport';
+import { currentUserProfile } from '@/data/peoplesExperiences';
 import { usePastport } from '@/context/PastportContext';
 
 export default function ProfileScreen() {
@@ -11,7 +12,14 @@ export default function ProfileScreen() {
   return (
     <ScreenShell>
       <TopBar title="Profile" eyebrow="YOUR HERITAGE STORY" right={<Feather name="settings" size={20} color={ui.accent} />} />
-      <View style={styles.profileHeader}><View style={styles.avatar}><Text style={styles.avatarText}>TL</Text></View><View style={{ flex: 1 }}><Text style={styles.name}>Thando Lekgothoa</Text><Text style={styles.member}>Curious since 2026</Text></View><Pressable style={styles.editButton}><Text style={styles.editText}>Edit</Text></Pressable></View>
+      <View style={styles.profileHeader}>
+        <Image source={currentUserProfile.avatar} style={styles.avatar} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.name}>{currentUserProfile.name}</Text>
+          <Text style={styles.member}>{currentUserProfile.memberSince}</Text>
+        </View>
+        <Pressable style={styles.editButton}><Text style={styles.editText}>Edit</Text></Pressable>
+      </View>
       <View style={styles.statRow}><Stat value={String(visitedSites.length || 0)} label="Sites visited" /><Stat value="3" label="Periods seen" /><Stat value="120" label="Heritage points" /></View>
       <SectionHeading title="Badges" action="View all" onAction={() => undefined} />
       <View style={styles.badges}>{badges.map((badge) => <View key={badge.title} style={[styles.badge, !badge.earned && styles.badgeMuted]}><View style={[styles.badgeIcon, !badge.earned && styles.badgeIconMuted]}><Feather name={badge.earned ? 'award' : 'lock'} size={17} color={badge.earned ? ui.accent : ui.mutedForeground} /></View><Text style={[styles.badgeTitle, !badge.earned && styles.badgeTextMuted]}>{badge.title}</Text><Text style={styles.badgeDescription}>{badge.description}</Text></View>)}</View>
@@ -29,8 +37,7 @@ function PrefRow({ icon, title, value }: { icon: keyof typeof Feather.glyphMap; 
 
 const styles = StyleSheet.create({
   profileHeader: { flexDirection: 'row', alignItems: 'center', gap: 13, marginBottom: 22 },
-  avatar: { width: 60, height: 60, borderRadius: 22, backgroundColor: '#2B2551', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#7965BE' },
-  avatarText: { color: ui.primary, fontSize: 18, fontWeight: '700' },
+  avatar: { width: 60, height: 60, borderRadius: 22, backgroundColor: '#2B2551', borderWidth: 1, borderColor: '#7965BE' },
   name: { color: ui.foreground, fontSize: 17, fontWeight: '700' },
   member: { color: ui.mutedForeground, fontSize: 12, marginTop: 4 },
   editButton: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 13, backgroundColor: ui.card },

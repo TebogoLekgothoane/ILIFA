@@ -2,12 +2,12 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import TrailDetailScreen from '@/app/trail';
-import { trail } from '@/data/pastport';
-import { openTrailDirections } from '@/lib/directions';
+import { heritageTrailMapPlaces } from '@/data/pastport';
+import { openTrailPlaces } from '@/lib/directions';
 
 jest.mock('@/lib/directions', () => ({
   mapsAppName: (os = require('react-native').Platform.OS) => (os === 'ios' ? 'Maps' : 'Google Maps'),
-  openTrailDirections: jest.fn(),
+  openTrailPlaces: jest.fn(),
 }));
 
 jest.mock('expo-router', () => ({
@@ -33,23 +33,23 @@ describe('TrailDetailScreen', () => {
     Platform.OS = originalOS;
   });
 
-  it('opens Apple Maps from the iOS start-trail button', () => {
+  it('opens Apple Maps from the iOS start-trail button with hardcoded places', () => {
     Platform.OS = 'ios';
     const screen = render(<TrailDetailScreen />);
 
     fireEvent.press(screen.getByText('Start trail in Maps'));
 
-    expect(openTrailDirections).toHaveBeenCalledWith(trail.locations);
+    expect(openTrailPlaces).toHaveBeenCalledWith(heritageTrailMapPlaces);
     expect(screen.getByText('Continue trail in Maps')).toBeTruthy();
   });
 
-  it('opens Google Maps from the Android start-trail button', () => {
+  it('opens Google Maps from the Android start-trail button with hardcoded places', () => {
     Platform.OS = 'android';
     const screen = render(<TrailDetailScreen />);
 
     fireEvent.press(screen.getByText('Start trail in Google Maps'));
 
-    expect(openTrailDirections).toHaveBeenCalledWith(trail.locations);
+    expect(openTrailPlaces).toHaveBeenCalledWith(heritageTrailMapPlaces);
     expect(screen.getByText('Continue trail in Google Maps')).toBeTruthy();
   });
 });

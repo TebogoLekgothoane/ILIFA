@@ -7,6 +7,7 @@ import { station, periods } from '@/data/pastport';
 import { usePastport } from '@/context/PastportContext';
 import { IconButton, PrimaryButton, ui } from '@/components/PastportUI';
 import { NarrationPlayer } from '@/components/NarrationPlayer';
+import { PeopleExperiencesSection } from '@/components/PeopleExperiencesSection';
 import { StationAmbience } from '@/components/StationAmbience';
 
 export default function SiteScreen() {
@@ -32,6 +33,11 @@ export default function SiteScreen() {
         <Text style={styles.timelineCopy}>{periods.find((period) => period.year === year)?.caption}</Text>
         <PrimaryButton label="Show me this place in 1920" icon="arrow-right" onPress={() => router.push('/experience')} />
         <View style={styles.sourceNote}><Feather name="info" size={14} color={ui.mutedForeground} /><Text style={styles.sourceText}>Historical details are documented where sources are available. Reconstructions are clearly labelled.</Text></View>
+        <View style={styles.peopleBreak}>
+          <Text style={styles.peopleBreakTitle}>History tells you what happened here.</Text>
+          <Text style={styles.peopleBreakCopy}>People tell you what this place means.</Text>
+        </View>
+        <PeopleExperiencesSection siteId={station.id} siteName={station.name} coordinates={station.coordinates} />
       </ScrollView>
     </View>
   );
@@ -65,4 +71,7 @@ const styles = StyleSheet.create({
   sourceNote: { flexDirection: 'row', gap: 8, marginTop: 18, paddingHorizontal: 4 },
   sourceText: { color: ui.mutedForeground, fontSize: 10, lineHeight: 15, flex: 1 },
   player: { marginBottom: 22 },
+  peopleBreak: { marginTop: 28, marginBottom: 18, paddingTop: 22, borderTopWidth: 1, borderTopColor: '#2A2742' },
+  peopleBreakTitle: { color: ui.foreground, fontSize: 18, fontWeight: '700', lineHeight: 24 },
+  peopleBreakCopy: { color: '#C9C3D6', fontSize: 15, lineHeight: 22, marginTop: 6 },
 });

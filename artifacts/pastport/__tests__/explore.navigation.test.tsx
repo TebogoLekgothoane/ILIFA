@@ -22,6 +22,14 @@ jest.mock('@expo/vector-icons', () => ({
   Feather: () => null,
 }));
 
+jest.mock('@/components/PeopleExperiencesSection', () => ({
+  PeopleExperiencesSection: () => null,
+}));
+
+jest.mock('@/components/BookableExperiencesSection', () => ({
+  BookableExperiencesSection: () => null,
+}));
+
 jest.mock('@/components/ExploreMap', () => {
   const React = require('react');
   const { Pressable } = require('react-native');

@@ -42,7 +42,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "place",
     content:
       "East London Railway Station is a historical railway station in East London, Eastern Cape, South Africa.",
-    source: "PASTPORT heritage record",
+    source: "Ilifa Lab legacy record",
     confidence: "documented",
   },
   {
@@ -51,7 +51,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "railway history",
     content:
       "The station connected a growing coastal city to the wider country. Rail made East London part of a larger movement of people, goods, and news.",
-    source: "PASTPORT heritage record",
+    source: "Ilifa Lab legacy record",
     confidence: "documented",
   },
   {
@@ -60,7 +60,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "station development",
     content:
       "The current heritage record lists the station period as 1880 to the present. A more precise opening date, architect, or construction programme is not in this record.",
-    source: "PASTPORT heritage record",
+    source: "Ilifa heritage record",
     confidence: "limited",
   },
   {
@@ -69,7 +69,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "early railway period",
     content:
       "The early-1900s view in this experience is presented as a time of steam, stories, and a city in motion. Exact street-level appearance from that period is not fully documented in the current record.",
-    source: "PASTPORT heritage record",
+    source: "Ilifa heritage record",
     confidence: "limited",
   },
   {
@@ -78,7 +78,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "visual reconstruction",
     content:
       "The interactive model is a historical reconstruction of East London Railway Station’s early-1900s appearance. It is not a surviving photograph and should not be treated as a verified image of every architectural detail.",
-    source: "PASTPORT heritage record",
+    source: "Ilifa heritage record",
     confidence: "reconstruction",
   },
   {
@@ -87,7 +87,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "post-war junction",
     content:
       "The 1950 layer is described as a busy post-war rail junction. Exact street-level details from that decade are limited, so the visual layer is a reconstruction rather than a verified photograph.",
-    source: "PASTPORT heritage record",
+    source: "Ilifa heritage record",
     confidence: "limited",
   },
   {
@@ -96,7 +96,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "today",
     content:
       "The present-day layer shows the station as it stands now. Historical comparison should stay within the documented and reconstruction notes above.",
-    source: "PASTPORT heritage record",
+    source: "Ilifa heritage record",
     confidence: "documented",
   },
   {
@@ -105,7 +105,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "steam locomotive",
     content:
       "A steam locomotive object is included as a period reconstruction of locomotives that carried passengers and goods through the Eastern Cape. It is labelled as a reconstruction, not a documented surviving vehicle at this site.",
-    source: "PASTPORT demo archive",
+    source: "Ilifa demo archive",
     confidence: "reconstruction",
   },
   {
@@ -114,7 +114,7 @@ export const HERITAGE_RECORDS: HeritageRecord[] = [
     topic: "station arch",
     content:
       "The station arch is shown as an AI-generated reconstruction based on available historical references. It is not a verified surviving photograph of the original arch.",
-    source: "PASTPORT demo archive",
+    source: "Ilifa demo archive",
     confidence: "reconstruction",
   },
   {
